@@ -1,6 +1,7 @@
 package com.kugou.loader.clickhouse;
 
-import com.kugou.loader.clickhouse.cli.MainCliParamterPraser;
+import com.kugou.loader.clickhouse.cli.MainCliParameterParser;
+import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import com.kugou.loader.clickhouse.mapper.ClickhouseJDBCConfiguration;
 import com.kugou.loader.clickhouse.mapper.ClickhouseLoaderMapper;
 import com.kugou.loader.clickhouse.mapper.format.ClickhouseJDBCOutputFormat;
@@ -34,20 +35,21 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         Configuration conf = new Configuration(getConf());
         String[] otherArgs = new GenericOptionsParser(conf, strings).getRemainingArgs();
 
-        MainCliParamterPraser cliParamterPraser = new MainCliParamterPraser();
-        cliParamterPraser.cmdLineParser.parseArgument(otherArgs);
+        MainCliParameterParser cliParameterParser = new MainCliParameterParser();
+        cliParameterParser.cmdLineParser.parseArgument(otherArgs);
 
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_CLICKHOUSE_FORMAT, cliParamterPraser.clickhouseFormat);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_CONNECT, cliParamterPraser.connect);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_REPACE_CHAR,cliParamterPraser.replaceChar);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_DRIVER,cliParamterPraser.driver);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_EXPORT_DIR,cliParamterPraser.exportDir);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_FIELDS_TERMINATED_BY,cliParamterPraser.fieldsTerminatedBy);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_NULL_NON_STRING,cliParamterPraser.nullNonString);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_NULL_STRING,cliParamterPraser.nullString);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_DT,cliParamterPraser.dt);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_BATCH_SIZE,String.valueOf(cliParamterPraser.batchSize));
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_TABLE,cliParamterPraser.table);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_CLICKHOUSE_FORMAT, cliParameterParser.clickhouseFormat);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_CONNECT, cliParameterParser.connect);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_REPACE_CHAR,cliParameterParser.replaceChar);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_DRIVER,cliParameterParser.driver);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_EXPORT_DIR,cliParameterParser.exportDir);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_FIELDS_TERMINATED_BY,cliParameterParser.fieldsTerminatedBy);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_NULL_NON_STRING,cliParameterParser.nullNonString);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_NULL_STRING,cliParameterParser.nullString);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_DT,cliParameterParser.dt);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_BATCH_SIZE,String.valueOf(cliParameterParser.batchSize));
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_TABLE,cliParameterParser.table);
+        conf.set(ClickhouseJDBCConfiguration.CLI_P_MAXTRIES, String.valueOf(cliParameterParser.maxTries));
 
 
         Job job = Job.getInstance(conf);
@@ -63,8 +65,12 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         job.setOutputValueClass(Text.class);
 
         job.setNumReduceTasks(0);
-
         job.setInputFormatClass(OrcInputFormat.class);
+
+        //设置Map关闭推测执行task
+        if (!conf.getBoolean(ConfigurationOptions.MAPRED_MAP_SPECULATIVE_EXECUTION, true)) {
+            job.setMapSpeculativeExecution(false);
+        }
 
         FileInputFormat.addInputPath(job, new Path(conf.get(ClickhouseJDBCConfiguration.CLI_P_EXPORT_DIR)));
 

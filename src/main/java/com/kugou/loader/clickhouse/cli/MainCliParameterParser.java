@@ -6,7 +6,7 @@ import org.kohsuke.args4j.Option;
 /**
  * Created by jaykelin on 2016/11/1.
  */
-public class MainCliParamterPraser {
+public class MainCliParameterParser {
 
     public CmdLineParser cmdLineParser;
 
@@ -43,7 +43,10 @@ public class MainCliParamterPraser {
     @Option(name="--batch-size", required = false, usage = "--batch-size 100000")
     public int batchSize = 100;
 
-    public MainCliParamterPraser(){
+    @Option(name="--max-tries", required = false, usage = "--max-tries 3")
+    public int maxTries = 3;
+
+    public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }
 }

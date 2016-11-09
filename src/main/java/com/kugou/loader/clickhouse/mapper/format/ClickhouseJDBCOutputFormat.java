@@ -25,10 +25,11 @@ public class ClickhouseJDBCOutputFormat<NullWritable, Text> extends OutputFormat
         String table = clickhouseJDBCConfiguration.getTableName();
         int batchSize = clickhouseJDBCConfiguration.getBatchSize();
         String format = clickhouseJDBCConfiguration.getClickhouseFormat();
+        int maxTries = clickhouseJDBCConfiguration.getMaxTries();
 
         RecordWriter writer = null;
         try {
-            writer = new ClickhouseJDBCRecordWriter(clickhouseJDBCConfiguration.getConnection(), format, table, batchSize);
+            writer = new ClickhouseJDBCRecordWriter(clickhouseJDBCConfiguration.getConnection(), format, table, batchSize, maxTries);
         } catch (SQLException e) {
             throw new IOException(e.getMessage(), e.getCause());
         } catch (ClassNotFoundException e) {
@@ -57,32 +58,40 @@ public class ClickhouseJDBCOutputFormat<NullWritable, Text> extends OutputFormat
         private String format;
         private String table;
         private int batchSize;
+        private int maxTries;
 
         private final String sqlHeader;
         private StringBuffer cache = new StringBuffer();
         private int currentIndex = 0;
 
+        private int tries = 0;
 
-        public ClickhouseJDBCRecordWriter(Connection connection,String format, String table, int batchSize) throws SQLException {
+
+        public ClickhouseJDBCRecordWriter(Connection connection,String format, String table,
+                                          int batchSize, int maxTries) throws SQLException {
             this.connection = connection;
             this.statement = this.connection.createStatement();
             this.format = format;
             this.table = table;
             this.batchSize = batchSize;
+            this.maxTries = maxTries;
 
-            sqlHeader = "INSERT INTO "+this.table +"FORMAT "+this.format +"\n";
+            sqlHeader = "INSERT INTO "+this.table +" FORMAT "+this.format;
+            log.info("Clickhouse JDBC : sql_header : "+sqlHeader);
         }
 
         @Override
         public void write(NullWritable nullWritable, Text text) throws IOException, InterruptedException {
             synchronized (this){
-                if(currentIndex > this.batchSize){
+                if(currentIndex >= this.batchSize){
                     batchCommit();
                 }
                 if(cache.length() <= 0){
-                    cache.append(sqlHeader);
+                    log.debug("Clickhouse JDBC : Insert Sample data like that[" + text.toString() + "]");
+                    cache.append(sqlHeader).append("\n");
                 }
                 cache.append(text.toString()).append("\n");
+                currentIndex++;
             }
         }
 
@@ -101,13 +110,29 @@ public class ClickhouseJDBCOutputFormat<NullWritable, Text> extends OutputFormat
 
         public void batchCommit(){
             try {
-                this.statement.executeUpdate(cache.toString());
-            } catch (SQLException e) {
-                log.error(e.getMessage(), e);
-                // TODO 二分插入，减少抛弃数量
-            } finally {
+                if(this.tries < maxTries){
+                    long l = System.currentTimeMillis();
+                    log.info("Clickhouse JDBC : batch_commit["+this.tries+"] start. batchsize="+currentIndex);
+                    this.statement.executeUpdate(cache.toString());
+                    log.info("Clickhouse JDBC : batch_commit["+this.tries+"] end. take time "+(System.currentTimeMillis() - l)+"ms.");
+                }else{
+                    log.warn("Clickhouse JDBC : "+maxTries+" times tries all failed. batchsize="+currentIndex);
+                    // TODO 所有尝试都失败了
+                }
+                // 初始化所有参数
+                this.tries = 0;
+                currentIndex = 0;
                 // 清空cache
                 cache.setLength(0);
+            } catch (SQLException e) {
+                log.error("Clickhouse JDBC : failed. COUSE BY "+e.getMessage());
+                this.tries++;
+                try {
+                    Thread.sleep(this.tries*3000l);
+                } catch (InterruptedException e1) {
+                    e1.printStackTrace();
+                }
+                this.batchCommit();
             }
         }
     }

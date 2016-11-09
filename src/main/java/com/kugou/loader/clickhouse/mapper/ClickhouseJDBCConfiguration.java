@@ -26,6 +26,7 @@ public class ClickhouseJDBCConfiguration {
     public final static String CLI_P_DT = "dt";
     public final static String CLI_P_BATCH_SIZE = "batch-size";
     public final static String CLI_P_TABLE = "table";
+    public final static String CLI_P_MAXTRIES = "max-tries";
 
     private Configuration conf;
 
@@ -77,5 +78,9 @@ public class ClickhouseJDBCConfiguration {
 
     public int getBatchSize(){
         return conf.getInt(CLI_P_BATCH_SIZE, 100);
+    }
+
+    public int getMaxTries(){
+        return conf.getInt(CLI_P_MAXTRIES, 3);
     }
 }
