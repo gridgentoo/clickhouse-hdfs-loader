@@ -28,6 +28,8 @@ public class ClickhouseJDBCConfiguration {
     public final static String CLI_P_TABLE = "table";
     public final static String CLI_P_MAXTRIES = "max-tries";
 
+    public final static String LOADER_TEMP_TABLE_PREFIX = "loader_temp_table_prefix";
+
     private Configuration conf;
 
     public ClickhouseJDBCConfiguration(Configuration configuration){
@@ -82,5 +84,9 @@ public class ClickhouseJDBCConfiguration {
 
     public int getMaxTries(){
         return conf.getInt(CLI_P_MAXTRIES, 3);
+    }
+
+    public String getTempTablePrefix(){
+        return conf.get(LOADER_TEMP_TABLE_PREFIX);
     }
 }

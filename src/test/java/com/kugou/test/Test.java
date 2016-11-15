@@ -6,13 +6,17 @@ package com.kugou.test;
 public class Test {
 
     public static void main(String[] args){
-        String line = "sweef|wlk违反了违法|sdfwef|lslls\tsss算了";
-        String replaceChar = " ";
-        String fieldsTerminatedBy = "|";
-        String nullNonString = " ";
-        line = line.replace('\t', replaceChar.charAt(0))
-                .replace(fieldsTerminatedBy.charAt(0), '\t')
-                .replace("\\N", nullNonString);
-        System.out.println(line);
+//        String table = "default.demo";
+//        if(table.contains(".")){
+//            System.out.println(table.substring(0, table.indexOf(".")));
+//        }
+//        String ddl = "CREATE TABLE default.demo ( dt Date,  name String,  value UInt64) ENGINE = MergeTree(dt, (dt, name), 8192)";
+//        ddl = ddl.replace("default.demo","xx.xx");
+//        ddl = ddl.substring(0, ddl.indexOf("=")+1);
+//        ddl+= " StripeLog";
+//        System.out.println(ddl);
+
+        String taskid = "task_1477024973709_128433_m_000001";
+        System.out.println(taskid.substring(taskid.indexOf("m_")));
     }
 }

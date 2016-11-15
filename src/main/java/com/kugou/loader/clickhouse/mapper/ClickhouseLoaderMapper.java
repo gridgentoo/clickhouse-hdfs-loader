@@ -1,5 +1,7 @@
 package com.kugou.loader.clickhouse.mapper;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
@@ -13,6 +15,19 @@ import java.io.IOException;
  */
 public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, NullWritable, Text> {
 
+    private static final Log log = LogFactory.getLog(ClickhouseLoaderMapper.class);
+
+    @Override
+    protected void setup(Context context) throws IOException, InterruptedException {
+        log.info("Clickhouse JDBC : Mapper Setup.");
+        super.setup(context);
+    }
+
+    @Override
+    protected void cleanup(Context context) throws IOException, InterruptedException {
+        log.info("Clickhouse JDBC : Mapper cleanup.");
+        super.cleanup(context);
+    }
 
     @Override
     protected void map(NullWritable key, OrcStruct value, Context context) throws IOException, InterruptedException {
@@ -21,13 +36,12 @@ public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Null
 //        String nullString = clickhouseJDBCConfiguration.getNullString();
         String nullNonString = "";
         String nullString = "";
-        String fieldsTerminatedBy = clickhouseJDBCConfiguration.getFieldsTerminatedBy();
         String replaceChar = clickhouseJDBCConfiguration.getReplaceChar();
         String dt = clickhouseJDBCConfiguration.getDt();
-        StringBuffer valsb = new StringBuffer();
+        StringBuilder row = new StringBuilder();
         for(int i = 0; i < value.getNumFields(); i++){
             if(i != 0) {
-                valsb.append('\t');
+                row.append('\t');
             }
             WritableComparable fieldVaule = value.getFieldValue(i);
             String field;
@@ -43,10 +57,10 @@ public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Null
                     field = field.replace('\t', replaceChar.charAt(0));
                 }
             }
-            valsb.append(field);
+            row.append(field);
         }
-        valsb.append('\t').append(dt);
+        row.append('\t').append(dt);
 
-        context.write(NullWritable.get(), new Text(valsb.toString()));
+        context.write(NullWritable.get(), new Text(row.toString()));
     }
 }

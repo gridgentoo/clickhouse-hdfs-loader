@@ -49,8 +49,13 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         conf.set(ClickhouseJDBCConfiguration.CLI_P_DT,cliParameterParser.dt);
         conf.set(ClickhouseJDBCConfiguration.CLI_P_BATCH_SIZE,String.valueOf(cliParameterParser.batchSize));
         conf.set(ClickhouseJDBCConfiguration.CLI_P_TABLE,cliParameterParser.table);
-        conf.set(ClickhouseJDBCConfiguration.CLI_P_MAXTRIES, String.valueOf(cliParameterParser.maxTries));
+        conf.setInt(ClickhouseJDBCConfiguration.CLI_P_MAXTRIES, cliParameterParser.maxTries);
 
+        // generate temp table name
+        String tempTablePrefix = cliParameterParser.table+"_"+
+                cliParameterParser.dt.replaceAll("-","")+"_"+
+                System.currentTimeMillis()/1000+"_";
+        conf.set(ClickhouseJDBCConfiguration.LOADER_TEMP_TABLE_PREFIX, tempTablePrefix);
 
         Job job = Job.getInstance(conf);
         job.setJarByClass(ClickhouseHdfsLoader.class);

@@ -22,7 +22,10 @@ public class ClickhouseJDBCOutputFormat<NullWritable, Text> extends OutputFormat
     @Override
     public RecordWriter<NullWritable, Text> getRecordWriter(TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
         ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(taskAttemptContext.getConfiguration());
-        String table = clickhouseJDBCConfiguration.getTableName();
+//        String table = clickhouseJDBCConfiguration.getTableName();
+        String taskid = taskAttemptContext.getTaskAttemptID().getTaskID().toString();
+        String table = "temp."+clickhouseJDBCConfiguration.getTempTablePrefix()+taskid.substring(taskid.indexOf("m_"))+"_"+taskAttemptContext.getTaskAttemptID().getId();
+//        String table = "temp."+clickhouseJDBCConfiguration.getTempTablePrefix()+taskAttemptContext.getTaskAttemptID().getId();
         int batchSize = clickhouseJDBCConfiguration.getBatchSize();
         String format = clickhouseJDBCConfiguration.getClickhouseFormat();
         int maxTries = clickhouseJDBCConfiguration.getMaxTries();
@@ -46,7 +49,7 @@ public class ClickhouseJDBCOutputFormat<NullWritable, Text> extends OutputFormat
 
     @Override
     public OutputCommitter getOutputCommitter(TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
-        return new FileOutputCommitter(FileOutputFormat.getOutputPath(taskAttemptContext), taskAttemptContext);
+        return new ClickhouseHDFSLoaderOutputCommitter(FileOutputFormat.getOutputPath(taskAttemptContext), taskAttemptContext);
     }
 
     public class ClickhouseJDBCRecordWriter extends RecordWriter<NullWritable, Text>{
@@ -128,7 +131,7 @@ public class ClickhouseJDBCOutputFormat<NullWritable, Text> extends OutputFormat
                 log.error("Clickhouse JDBC : failed. COUSE BY "+e.getMessage());
                 this.tries++;
                 try {
-                    Thread.sleep(this.tries*3000l);
+                    Thread.sleep(this.tries*60000l);
                 } catch (InterruptedException e1) {
                     e1.printStackTrace();
                 }
