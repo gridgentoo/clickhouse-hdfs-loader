@@ -4,7 +4,8 @@ import com.kugou.loader.clickhouse.cli.MainCliParameterParser;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import com.kugou.loader.clickhouse.mapper.ClickhouseJDBCConfiguration;
 import com.kugou.loader.clickhouse.mapper.ClickhouseLoaderMapper;
-import com.kugou.loader.clickhouse.mapper.format.ClickhouseJDBCOutputFormat;
+import com.kugou.loader.clickhouse.mapper.format.ClickhouseLoaderOutputFormat;
+import com.kugou.loader.clickhouse.reducer.ClickhouseLoaderReducer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -14,6 +15,7 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
@@ -62,14 +64,16 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         job.setJobName("Clickhouse HDFS Loader");
         job.setMapperClass(ClickhouseLoaderMapper.class);
 
-        job.setOutputFormatClass(ClickhouseJDBCOutputFormat.class);
         job.setMapOutputKeyClass(NullWritable.class);
         job.setMapOutputValueClass(Text.class);
 
         job.setOutputKeyClass(NullWritable.class);
         job.setOutputValueClass(Text.class);
 
-        job.setNumReduceTasks(0);
+        job.setReducerClass(ClickhouseLoaderReducer.class);
+        job.setOutputFormatClass(NullOutputFormat.class);
+
+        job.setNumReduceTasks(cliParameterParser.numReduceTasks);
         job.setInputFormatClass(OrcInputFormat.class);
 
         //设置Map关闭推测执行task

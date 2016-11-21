@@ -6,10 +6,10 @@ package com.kugou.test;
 public class Test {
 
     public static void main(String[] args){
-//        String table = "default.demo";
-//        if(table.contains(".")){
-//            System.out.println(table.substring(0, table.indexOf(".")));
-//        }
+        String table = "default.demo";
+        if(table.contains(".")){
+            System.out.println(table.substring(table.indexOf(".")));
+        }
 //        String ddl = "CREATE TABLE default.demo ( dt Date,  name String,  value UInt64) ENGINE = MergeTree(dt, (dt, name), 8192)";
 //        ddl = ddl.replace("default.demo","xx.xx");
 //        ddl = ddl.substring(0, ddl.indexOf("=")+1);

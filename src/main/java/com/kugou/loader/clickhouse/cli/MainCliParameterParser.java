@@ -46,6 +46,9 @@ public class MainCliParameterParser {
     @Option(name="--max-tries", required = false, usage = "--max-tries 3")
     public int maxTries = 3;
 
+    @Option(name="--num-reduce-tasks", required = false, usage = "--num-reduce-tasks 2")
+    public int numReduceTasks = 1;
+
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }

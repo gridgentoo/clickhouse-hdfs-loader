@@ -7,6 +7,8 @@ import org.apache.hadoop.conf.Configuration;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Created by jaykelin on 2016/11/2.
@@ -30,6 +32,9 @@ public class ClickhouseJDBCConfiguration {
 
     public final static String LOADER_TEMP_TABLE_PREFIX = "loader_temp_table_prefix";
 
+    private final static Pattern urlRegexp = Pattern.compile("^jdbc:clickhouse://([a-zA-Z0-9.-]+|\\[[:.a-fA-F0-9]+\\]):([0-9]+)(?:|/|/([a-zA-Z0-9_]+))$");
+    private final static String DEFAULT_DATABASE = "default";
+
     private Configuration conf;
 
     public ClickhouseJDBCConfiguration(Configuration configuration){
@@ -42,8 +47,32 @@ public class ClickhouseJDBCConfiguration {
         return DriverManager.getConnection(getConnectUrl());
     }
 
+    public String getDatabase(){
+        String table = conf.get(CLI_P_TABLE);
+        String database;
+        if(null != table && table.contains(".") && !table.endsWith(".")){
+            database = table.substring(0, table.indexOf("."));
+        }else{
+            Matcher m = urlRegexp.matcher(getConnectUrl());
+            if (m.find()) {
+                if (m.group(3) != null) {
+                    database = m.group(3);
+                } else {
+                    database = DEFAULT_DATABASE;
+                }
+            } else {
+                throw new IllegalArgumentException("Incorrect ClickHouse jdbc url: " + getConnectUrl());
+            }
+        }
+        return database;
+    }
+
     public String getTableName(){
-        return conf.get(CLI_P_TABLE);
+        String table = conf.get(CLI_P_TABLE);
+        if(table.contains(".") && !table.endsWith(".")){
+            table = table.substring(table.indexOf(".")+1);
+        }
+        return table;
     }
 
     public String getDriver(){
