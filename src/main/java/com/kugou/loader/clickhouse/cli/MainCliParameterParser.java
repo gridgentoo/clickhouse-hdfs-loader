@@ -49,6 +49,9 @@ public class MainCliParameterParser {
     @Option(name="--num-reduce-tasks", required = false, usage = "--num-reduce-tasks 2")
     public int numReduceTasks = 1;
 
+    @Option(name="--clickhouse-http-port", required = false, usage = "--clickhouse-http-port 8123")
+    public int clickhouseHttpPort = 8123;
+
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }

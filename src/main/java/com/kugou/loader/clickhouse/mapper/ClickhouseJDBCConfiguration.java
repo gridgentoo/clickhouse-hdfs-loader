@@ -29,6 +29,7 @@ public class ClickhouseJDBCConfiguration {
     public final static String CLI_P_BATCH_SIZE = "batch-size";
     public final static String CLI_P_TABLE = "table";
     public final static String CLI_P_MAXTRIES = "max-tries";
+    public final static String CLI_P_CLICKHOUSE_HTTP_PORT = "clickhouse-http-port";
 
     public final static String LOADER_TEMP_TABLE_PREFIX = "loader_temp_table_prefix";
 
@@ -117,5 +118,9 @@ public class ClickhouseJDBCConfiguration {
 
     public String getTempTablePrefix(){
         return conf.get(LOADER_TEMP_TABLE_PREFIX);
+    }
+
+    public int getClickhouseHttpPort(){
+        return conf.getInt(CLI_P_CLICKHOUSE_HTTP_PORT, 8123);
     }
 }
