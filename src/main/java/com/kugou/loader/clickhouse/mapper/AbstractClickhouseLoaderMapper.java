@@ -55,7 +55,12 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             this.statement = this.connection.createStatement();
             this.tempTable = getTempTableName(context);
 
+            // 初始化参数
             initTempEnv(clickhouseJDBCConfiguration);
+
+            // 创建
+            String createTableDDL = createTempTableDDL(clickhouseJDBCConfiguration, tempTable);
+            createTempTable(clickhouseJDBCConfiguration, statement, createTableDDL, 0, null);
         } catch (ClassNotFoundException e) {
             log.error(e.getMessage(), e);
             throw new IOException(e.getMessage(), e);
@@ -197,7 +202,6 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 targetTableName = configuration.getDatabase()+"."+targetTableName;
             }
             String targetTableDDL = queryTableDDL(targetTableName);
-            String createTableDDL = createTempTableDDL(targetTableName, tempTable);
 
             // 全局参数初始化
             Matcher m = CLICKHOUSE_CLUSTER_ID_PATTERN.matcher(targetTableDDL);
@@ -220,11 +224,25 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             }
             log.info("Clickhouse JDBC : INSERT USING header["+sqlHeader+"]");
 
-            createTempTable(configuration, statement, createTableDDL, 0, null);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             throw new IOException(e.getMessage(), e.getCause());
         }
+    }
+
+    /**
+     * tempTable ddl
+     *
+     * @param configuration
+     * @param tempTableName
+     * @return
+     */
+    protected String createTempTableDDL(ClickhouseJDBCConfiguration configuration, String tempTableName) throws SQLException {
+        String targetTableName = configuration.getTableName();
+        if (!targetTableName.contains(".")){
+            targetTableName = configuration.getDatabase()+"."+targetTableName;
+        }
+        return createTempTableDDL(targetTableName, tempTableName);
     }
 
     /**
