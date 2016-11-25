@@ -127,15 +127,6 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
 
                     // drop temp table
                     cleanTemp(statement, tempTable, 0);
-
-                    if(targetIsDistributeTable){
-                        String connectionUrl = "jdbc:clickhouse://"+key.toString()+":"+clickhouseJDBCConfiguration.getClickhouseHttpPort();
-                        Properties properties = new Properties();
-                        properties.setProperty("profile", "insert");
-                        connection = DriverManager.getConnection(connectionUrl, properties);
-                    }else{
-                        connection = this.connection;
-                    }
                 }
             }
         } catch (SQLException e){
