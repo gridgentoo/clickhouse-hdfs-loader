@@ -5,5 +5,6 @@ package com.kugou.loader.clickhouse.config;
  */
 public class ConfigurationOptions {
 
-    public static final String MAPRED_MAP_SPECULATIVE_EXECUTION = "mapreduce.map.speculative" ;//设置Map推测执行task
+    public static final String MAPPER_MAP_SPECULATIVE_EXECUTION = "mapreduce.map.speculative" ;//设置Map推测执行task
+    public static final String REDUCE_MAP_SPECULATIVE_EXECUTION = "reduce.map.speculative" ;//设置Map推测执行task
 }

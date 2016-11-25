@@ -32,7 +32,6 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
     private int maxTries;
 
     private Connection connection;
-    private Statement statement;
 
     @Override
     protected void setup(Context context) throws IOException, InterruptedException {
@@ -41,7 +40,6 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
         this.maxTries = clickhouseJDBCConfiguration.getMaxTries();
         try {
             this.connection = clickhouseJDBCConfiguration.getConnection();
-            this.statement = connection.createStatement();
 
             // init env
             initTempEnv(clickhouseJDBCConfiguration);
@@ -63,9 +61,6 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
     @Override
     protected void cleanup(Context context) throws IOException, InterruptedException {
         try{
-            if(null != statement){
-                this.statement.close();
-            }
             if(null != connection){
                 this.connection.close();
             }
@@ -77,16 +72,89 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
 
     @Override
     protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
-        Iterator<Text> it = values.iterator();
-        String targetTable = clickhouseJDBCConfiguration.getDatabase()+"."+clickhouseJDBCConfiguration.getTableName();
-        while(it.hasNext()){
-            Text value = it.next();
-            if(value != null){
-                String tempTable = value.toString();
+        log.info("Clickhouse JDBC : reduce process key["+key.toString()+"].");
+        Connection connection = null;
+        Statement statement = null;
+        try{
+            ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+            String targetTable = clickhouseJDBCConfiguration.getTableName();
+            if(targetIsDistributeTable){
+                targetTable = distributedLocalDatabase + "." + targetTable;
 
-                // insert
-                insertFromTemp(clickhouseJDBCConfiguration, key, this.statement, tempTable, targetTable, 0);
+                String connectionUrl = "jdbc:clickhouse://"+key.toString()+":"+clickhouseJDBCConfiguration.getClickhouseHttpPort();
+                Properties properties = new Properties();
+                properties.setProperty("profile", "insert");
+                connection = DriverManager.getConnection(connectionUrl, properties);
+                statement = connection.createStatement();
+            }else{
+                targetTable = clickhouseJDBCConfiguration.getDatabase()+"."+ targetTable;
+                connection = this.connection;
+                statement = connection.createStatement();
+            }
+            Iterator<Text> it = values.iterator();
+            while(it.hasNext()){
+                Text value = it.next();
+                if(value != null){
+                    String tempTable = value.toString();
+                    log.info("Clickhouse JDBC : process host["+key.toString()+"] temptable["+tempTable+"]");
+
+                    StringBuilder sql = new StringBuilder("INSERT INTO ");
+                    sql.append(targetTable).append(" SELECT * FROM ").append(tempTable);
+
+                    String sourceDatabase = null;
+                    String sourceTable = null;
+                    int docIdex = tempTable.indexOf(".");
+                    if(docIdex >= 0){
+                        sourceDatabase = tempTable.substring(0, docIdex);
+                        sourceTable = tempTable.substring(docIdex+1);
+                    }else {
+                        sourceDatabase = clickhouseJDBCConfiguration.getDatabase();
+                        sourceTable = tempTable;
+                    }
+                    int count = 0;
+                    ResultSet ret = statement.executeQuery("SELECT count(*) FROM system.tables WHERE database = '"+sourceDatabase+"' and name = '"+sourceTable+"'");
+                    if(ret.next()){
+                        count = ret.getInt(1);
+                    }
+                    ret.close();
+
+                    if(count == 0){
+                        log.warn("Clickhouse JDBC : host["+key.toString()+"] table["+sourceDatabase+"."+sourceTable+"] not exists.");
+                        continue;
+                    }
+                    // insert
+                    insertFromTemp(statement, sql.toString(), 0);
+
+                    // drop temp table
+                    cleanTemp(statement, tempTable, 0);
+
+                    if(targetIsDistributeTable){
+                        String connectionUrl = "jdbc:clickhouse://"+key.toString()+":"+clickhouseJDBCConfiguration.getClickhouseHttpPort();
+                        Properties properties = new Properties();
+                        properties.setProperty("profile", "insert");
+                        connection = DriverManager.getConnection(connectionUrl, properties);
+                    }else{
+                        connection = this.connection;
+                    }
+                }
+            }
+        } catch (SQLException e){
+            log.error(e.getMessage(), e);
+            throw new IOException(e.getMessage(), e);
+        } finally {
+            if (null != connection && targetIsDistributeTable){
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (null != statement){
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -142,61 +210,24 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
     /**
      *
      * @param statement
-     * @param tempTable
-     * @param targetTable
+     * @param insertSQL
+     * @param tries
+     * @throws IOException
      */
-    protected synchronized void insertFromTemp(ClickhouseJDBCConfiguration config, Text key,
-                                               Statement statement, String tempTable,
-                                               String targetTable, int tries) throws IOException {
-        StringBuilder sb = new StringBuilder("INSERT INTO ");
-        sb.append(targetTable).append(" SELECT * FROM ").append(tempTable);
+    protected synchronized void insertFromTemp(Statement statement,String insertSQL, int tries) throws IOException {
         if(maxTries <= tries){
-            throw new IOException("Clickhouse JDBC : execute sql["+sb.toString()+"] all tries failed.");
+            throw new IOException("Clickhouse JDBC : execute sql["+insertSQL+"] all tries failed.");
         }
-        Connection conn = null;
-        Statement stat = null;
         try {
-            if(targetIsDistributeTable){
-                if (null != distributedLocalDatabase){
-                    sb = new StringBuilder("INSERT INTO ");
-                    sb.append(distributedLocalDatabase).append(".").append(config.getTableName()).append(" ");
-                    sb.append("SELECT * FROM ").append(tempTable);
-                }
-                String connection = "jdbc:clickhouse://"+key.toString()+":"+config.getClickhouseHttpPort();
-                Properties properties = new Properties();
-                properties.setProperty("profile", "insert");
-                conn = DriverManager.getConnection(connection, properties);
-                stat = conn.createStatement();
-
-                log.info("Clickhouse JDBC : execute sql["+sb+"]...");
-                stat.executeUpdate(sb.toString());
-                // drop temp table
-                cleanTemp(stat, tempTable, 0);
-            }else{
-                log.info("Clickhouse JDBC : execute sql["+sb+"]...");
-                statement.executeUpdate(sb.toString());
-                // drop temp table
-                cleanTemp(statement, tempTable, 0);
-            }
-
+            log.info("Clickhouse JDBC : execute sql["+insertSQL+"]...");
+            statement.executeUpdate(insertSQL);
         } catch (SQLException e) {
-            log.warn("Clickhouse JDBC : execute sql[" + sb + "]...failed, tries["+tries+"]. Cause By " + e.getMessage(), e);
+            log.warn("Clickhouse JDBC : execute sql[" + insertSQL + "]...failed, tries["+tries+"]. Cause By " + e.getMessage(), e);
             try {
                 Thread.sleep((tries+1) * 30*1000l);
             } catch (InterruptedException e1) {
             } finally {
-                insertFromTemp(config, key, statement, tempTable, targetTable, tries + 1);
-            }
-        } finally {
-            try{
-                if (null != stat){
-                    stat.close();
-                }
-                if (null != conn){
-                    conn.close();
-                }
-            }catch (Exception e){
-                e.printStackTrace();
+                insertFromTemp(statement, insertSQL, tries + 1);
             }
         }
     }
@@ -208,17 +239,20 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
      * @param tries
      */
     protected synchronized void cleanTemp(Statement statement, String tempTable, int tries) throws IOException {
+
         StringBuilder sb = new StringBuilder("DROP TABLE ").append(tempTable);
         if(maxTries <= tries){
-            throw new IOException("Clickhouse JDBC : execute sql["+sb.toString()+"] all tries failed.");
+            log.warn("Clickhouse JDBC : execute sql["+sb.toString()+"] all tries failed.");
+            return ;
         }
-        log.info("Clickhouse JDBC : execute sql["+sb+"]...");
-        try {
+        try{
+            log.info("Clickhouse JDBC : execute sql["+sb+"]...");
             statement.executeUpdate(sb.toString());
-        } catch (SQLException e) {
+
+        }catch (SQLException e){
             log.info("Clickhouse JDBC : execute sql[" + sb + "]...failed, tries["+tries+"]. Cause By " + e.getMessage(), e);
             try {
-                Thread.sleep((tries+1) * 30*1000l);
+                Thread.sleep((tries+1) *1000l);
             } catch (InterruptedException e1) {
             } finally {
                 cleanTemp(statement, tempTable, tries + 1);

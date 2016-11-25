@@ -52,6 +52,12 @@ public class MainCliParameterParser {
     @Option(name="--clickhouse-http-port", required = false, usage = "--clickhouse-http-port 8123")
     public int clickhouseHttpPort = 8123;
 
+    @Option(name="--input-format", required = false, usage = "--input-format org.apache.orc.mapreduce.OrcInputFormat")
+    public String inputFormat = "org.apache.orc.mapreduce.OrcInputFormat";
+
+    @Option(name="--mapper-class", required = false, usage = "--mapper-class com.kugou.loader.clickhouse.mapper.OrcLoaderMapper")
+    public String mapperClass = "com.kugou.loader.clickhouse.mapper.OrcLoaderMapper";
+
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }

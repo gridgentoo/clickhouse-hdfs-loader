@@ -1,25 +1,22 @@
 package com.kugou.loader.clickhouse;
 
 import com.kugou.loader.clickhouse.cli.MainCliParameterParser;
-import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import com.kugou.loader.clickhouse.mapper.ClickhouseJDBCConfiguration;
-import com.kugou.loader.clickhouse.mapper.ClickhouseLoaderMapper;
-import com.kugou.loader.clickhouse.mapper.format.ClickhouseLoaderOutputFormat;
 import com.kugou.loader.clickhouse.reducer.ClickhouseLoaderReducer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-import org.apache.orc.mapreduce.OrcInputFormat;
 
 /**
  * Created by jaykelin on 2016/10/29.
@@ -63,24 +60,34 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         Job job = Job.getInstance(conf);
         job.setJarByClass(ClickhouseHdfsLoader.class);
         job.setJobName("Clickhouse HDFS Loader");
-        job.setMapperClass(ClickhouseLoaderMapper.class);
+
+        job.setMapperClass(conf.getClassByName(cliParameterParser.mapperClass).asSubclass(Mapper.class));
+        // 参数配置InputFormat
+        job.setInputFormatClass(conf.getClassByName(cliParameterParser.inputFormat).asSubclass(InputFormat.class));
 
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(Text.class);
 
-        job.setOutputKeyClass(NullWritable.class);
-        job.setOutputValueClass(Text.class);
+//        job.setOutputKeyClass(NullWritable.class);
+//        job.setOutputValueClass(Text.class);
 
         job.setReducerClass(ClickhouseLoaderReducer.class);
         job.setOutputFormatClass(NullOutputFormat.class);
 
-        job.setNumReduceTasks(cliParameterParser.numReduceTasks);
-        job.setInputFormatClass(OrcInputFormat.class);
+        if(cliParameterParser.numReduceTasks != -1){
+            job.setNumReduceTasks(cliParameterParser.numReduceTasks);
+        }
 
         //设置Map关闭推测执行task
-        if (!conf.getBoolean(ConfigurationOptions.MAPRED_MAP_SPECULATIVE_EXECUTION, true)) {
-            job.setMapSpeculativeExecution(false);
-        }
+        job.setMapSpeculativeExecution(false);
+//        if (!conf.getBoolean(ConfigurationOptions.MAPPER_MAP_SPECULATIVE_EXECUTION, true)) {
+//            job.setMapSpeculativeExecution(false);
+//        }
+        //设置Reduce关闭推测执行task
+        job.setReduceSpeculativeExecution(false);
+//        if (!conf.getBoolean(ConfigurationOptions.REDUCE_MAP_SPECULATIVE_EXECUTION, true)) {
+//            job.setReduceSpeculativeExecution(false);
+//        }
 
         FileInputFormat.addInputPath(job, new Path(conf.get(ClickhouseJDBCConfiguration.CLI_P_EXPORT_DIR)));
 
