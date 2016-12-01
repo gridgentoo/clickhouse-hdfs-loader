@@ -1,5 +1,6 @@
 package com.kugou.loader.clickhouse.mapper;
 
+import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
@@ -14,7 +15,7 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
 
     @Override
     public String readLine(NullWritable key, OrcStruct value, Context context) {
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
         String nullNonString = "";
         String nullString = "";
         String replaceChar = clickhouseJDBCConfiguration.getReplaceChar();
@@ -30,6 +31,9 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
                 field = nullString;
             }else{
                 field = fieldVaule.toString();
+                if (i == clickhouseDistributedTableShardingKeyIndex){
+                    clickhouseDistributedTableShardingKeyValue = field;
+                }
                 if(field.equals("\\N")){
                     field = nullNonString;
                 }else if(field.equalsIgnoreCase("NULL")) {
@@ -47,10 +51,10 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
     }
 
     @Override
-    public void write(String host, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
+    public void write(String host, String hostIndex, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
         if(!tempTable.contains(".")){
             tempTable = tempDatabase + "." + tempTable;
         }
-        context.write(new Text(host), new Text(tempTable));
+        context.write(new Text(hostIndex+"@"+host), new Text(tempTable));
     }
 }

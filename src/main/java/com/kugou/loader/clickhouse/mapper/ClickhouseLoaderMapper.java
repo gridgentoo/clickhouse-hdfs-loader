@@ -1,6 +1,7 @@
 package com.kugou.loader.clickhouse.mapper;
 
 import com.google.common.collect.Lists;
+import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.NullWritable;
@@ -46,7 +47,7 @@ public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Text
     @Override
     protected void setup(Context context) throws IOException, InterruptedException {
         log.info("Clickhouse JDBC : Mapper Setup.");
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
         this.maxTries = clickhouseJDBCConfiguration.getMaxTries();
         this.batchSize = clickhouseJDBCConfiguration.getBatchSize();
         try {
@@ -112,7 +113,7 @@ public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Text
 
     @Override
     protected void map(NullWritable key, OrcStruct value, Context context) throws IOException, InterruptedException {
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
         String nullNonString = "";
         String nullString = "";
         String replaceChar = clickhouseJDBCConfiguration.getReplaceChar();
@@ -181,7 +182,7 @@ public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Text
     }
 
     protected String getTempTableName(Context context){
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
         String taskId = context.getTaskAttemptID().getTaskID().toString();
         return "temp."+clickhouseJDBCConfiguration.getTempTablePrefix()+taskId.substring(taskId.indexOf("m_"))+"_"+context.getTaskAttemptID().getId();
     }
@@ -191,7 +192,7 @@ public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Text
      * @param configuration
      * @throws IOException
      */
-    private void initTempEnv(ClickhouseJDBCConfiguration configuration) throws IOException{
+    private void initTempEnv(ClickhouseConfiguration configuration) throws IOException{
         Statement statement = null;
         try {
             String table = configuration.getTableName();
@@ -249,7 +250,7 @@ public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Text
      * @param cause
      * @throws IOException
      */
-    private void createTempTable(ClickhouseJDBCConfiguration configuration, Statement statement,
+    private void createTempTable(ClickhouseConfiguration configuration, Statement statement,
                                  String ddl, int tries, Throwable cause) throws IOException, ClassNotFoundException {
         log.info("Clickhouse JDBC : create temp table["+ddl+"]");
         try {

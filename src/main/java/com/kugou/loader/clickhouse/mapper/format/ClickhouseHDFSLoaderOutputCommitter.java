@@ -1,10 +1,9 @@
 package com.kugou.loader.clickhouse.mapper.format;
 
-import com.kugou.loader.clickhouse.mapper.ClickhouseJDBCConfiguration;
+import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter;
 
@@ -41,7 +40,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
     @Override
     public void setupTask(TaskAttemptContext context) throws IOException {
         log.info("Clickhouse JDBC : OutputCommitter Setup.");
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
         String url = clickhouseJDBCConfiguration.getConnectUrl();
         Matcher m = urlRegexp.matcher(url);
         if (m.find()) {
@@ -67,7 +66,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
      * @param configuration
      * @throws IOException
      */
-    private void initTempEnv(ClickhouseJDBCConfiguration configuration) throws IOException{
+    private void initTempEnv(ClickhouseConfiguration configuration) throws IOException{
         Connection conn = null;
         Statement statement = null;
         try {
@@ -108,7 +107,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
      * @param cause
      * @throws IOException
      */
-    private void createTempTable(ClickhouseJDBCConfiguration configuration, Statement statement,
+    private void createTempTable(ClickhouseConfiguration configuration, Statement statement,
                                  String ddl, int tries, Throwable cause) throws IOException{
         try {
             if(tries <= configuration.getMaxTries()){
@@ -117,7 +116,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
                 throw new IOException("Clickhouse JDBC : create temp table[temp."+this.tempTable+"] failed.", cause);
             }
         } catch (SQLException e) {
-            log.warn("Clickhouse JDBC : Create temp table failed. tries : "+tries+" : "+e.getMessage(), e);
+            log.warn("Clickhouse JDBC : Create temp table failed. tries : " + tries + " : " + e.getMessage(), e);
             try {
                 Thread.sleep((tries+1) * 60000l);
             } catch (InterruptedException e1) {
@@ -130,7 +129,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
     public void commitTask(TaskAttemptContext context) throws IOException {
         log.info("Clickhouse JDBC : OutputCommitter Commit.");
 
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
         Connection conn = null;
         Statement statement = null;
         try {
@@ -171,7 +170,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
     public void abortTask(TaskAttemptContext context) throws IOException {
         log.info("Clickhouse JDBC : OutputCommitter Abort.");
 
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(context.getConfiguration());
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
         Connection conn = null;
         Statement statement = null;
         try {
@@ -203,7 +202,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
         super.abortTask(context);
     }
 
-    private void insertData(ClickhouseJDBCConfiguration configuration, Statement statement,
+    private void insertData(ClickhouseConfiguration configuration, Statement statement,
                             String sql, int tries, Throwable cause) throws IOException{
         try{
             if(tries < configuration.getMaxTries()){
@@ -221,7 +220,7 @@ public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
         }
     }
 
-    private void cleanupTempData(ClickhouseJDBCConfiguration configuration, Statement statement,
+    private void cleanupTempData(ClickhouseConfiguration configuration, Statement statement,
                                  String sql, int tries, Throwable cause) throws IOException{
         try{
             if(tries < configuration.getMaxTries()){

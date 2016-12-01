@@ -1,30 +1,15 @@
 package com.kugou.loader.clickhouse.mapper.format;
 
-import com.kugou.loader.clickhouse.mapper.ClickhouseJDBCConfiguration;
+import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.compress.CompressionCodec;
-import org.apache.hadoop.io.compress.GzipCodec;
-import org.apache.hadoop.mapred.FileAlreadyExistsException;
 import org.apache.hadoop.mapreduce.*;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import org.apache.hadoop.util.ReflectionUtils;
 
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.text.NumberFormat;
 
 /**
  * Created by jaykelin on 2016/11/15.
@@ -91,7 +76,7 @@ public class ClickhouseLoaderOutputFormat extends OutputFormat<NullWritable, Tex
          * @param cause
          * @throws IOException
          */
-        private void createTempTable(ClickhouseJDBCConfiguration configuration, Statement statement,
+        private void createTempTable(ClickhouseConfiguration configuration, Statement statement,
                                      String ddl, int tries, Throwable cause) throws IOException{
             log.info("Clickhouse JDBC : create temp table["+ddl+"]");
             try {

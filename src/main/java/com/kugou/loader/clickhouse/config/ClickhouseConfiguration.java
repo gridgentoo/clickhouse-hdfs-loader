@@ -1,4 +1,4 @@
-package com.kugou.loader.clickhouse.mapper;
+package com.kugou.loader.clickhouse.config;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -13,32 +13,16 @@ import java.util.regex.Pattern;
 /**
  * Created by jaykelin on 2016/11/2.
  */
-public class ClickhouseJDBCConfiguration {
+public class ClickhouseConfiguration extends ConfigurationKeys{
 
-    private final static Log log = LogFactory.getLog(ClickhouseJDBCConfiguration.class);
-
-    public final static String CLI_P_CONNECT = "connect";
-    public final static String CLI_P_CLICKHOUSE_FORMAT="clickhouse-format";
-    public final static String CLI_P_REPACE_CHAR = "replace-char";
-    public final static String CLI_P_DRIVER = "driver";
-    public final static String CLI_P_EXPORT_DIR = "export-dir";
-    public final static String CLI_P_FIELDS_TERMINATED_BY="fields-terminated-by";
-    public final static String CLI_P_NULL_NON_STRING = "null-non-string";
-    public final static String CLI_P_NULL_STRING = "null-string";
-    public final static String CLI_P_DT = "dt";
-    public final static String CLI_P_BATCH_SIZE = "batch-size";
-    public final static String CLI_P_TABLE = "table";
-    public final static String CLI_P_MAXTRIES = "max-tries";
-    public final static String CLI_P_CLICKHOUSE_HTTP_PORT = "clickhouse-http-port";
-
-    public final static String LOADER_TEMP_TABLE_PREFIX = "loader_temp_table_prefix";
+    private final static Log log = LogFactory.getLog(ClickhouseConfiguration.class);
 
     private final static Pattern urlRegexp = Pattern.compile("^jdbc:clickhouse://([a-zA-Z0-9.-]+|\\[[:.a-fA-F0-9]+\\]):([0-9]+)(?:|/|/([a-zA-Z0-9_]+))$");
     private final static String DEFAULT_DATABASE = "default";
 
     private Configuration conf;
 
-    public ClickhouseJDBCConfiguration(Configuration configuration){
+    public ClickhouseConfiguration(Configuration configuration){
         this.conf = configuration;
     }
 
@@ -66,6 +50,15 @@ public class ClickhouseJDBCConfiguration {
             }
         }
         return database;
+    }
+
+    public String extractHostFromConnectionUrl(){
+        Matcher m = urlRegexp.matcher(getConnectUrl());
+        if (m.find()){
+            return m.group(1);
+        } else {
+            return ConfigurationOptions.DEFAULT_CLICKHOUSE_HOST;
+        }
     }
 
     public String getTableName(){
@@ -122,5 +115,17 @@ public class ClickhouseJDBCConfiguration {
 
     public int getClickhouseHttpPort(){
         return conf.getInt(CLI_P_CLICKHOUSE_HTTP_PORT, 8123);
+    }
+
+    public String get(String name){
+        return conf.get(name);
+    }
+
+    public int getInt(String name, int defaultValue) {
+        return conf.getInt(name, defaultValue);
+    }
+
+    public boolean getBoolean(String name, boolean defaultValue) {
+        return conf.getBoolean(name, defaultValue);
     }
 }

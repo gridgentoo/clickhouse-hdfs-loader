@@ -1,7 +1,7 @@
 package com.kugou.loader.clickhouse.mapper.format;
 
 
-import com.kugou.loader.clickhouse.mapper.ClickhouseJDBCConfiguration;
+import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -36,7 +36,7 @@ public class ClickhouseJDBCOutputFormat extends TextOutputFormat<NullWritable, T
     @Override
     public RecordWriter<NullWritable, Text> getRecordWriter(TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
         Configuration conf = taskAttemptContext.getConfiguration();
-        ClickhouseJDBCConfiguration clickhouseJDBCConfiguration = new ClickhouseJDBCConfiguration(conf);
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(conf);
         String taskid = taskAttemptContext.getTaskAttemptID().getTaskID().toString();
         tempName = "temp."+clickhouseJDBCConfiguration.getTempTablePrefix()+taskid.substring(taskid.indexOf("m_"))+"_"+taskAttemptContext.getTaskAttemptID().getId();
 
@@ -84,7 +84,7 @@ public class ClickhouseJDBCOutputFormat extends TextOutputFormat<NullWritable, T
 
         private int tries = 0;
 
-        public ClickhouseJDBCRecordWriter(DataOutputStream output, ClickhouseJDBCConfiguration configuration, String keyValueSeparator){
+        public ClickhouseJDBCRecordWriter(DataOutputStream output, ClickhouseConfiguration configuration, String keyValueSeparator){
             this.out = output;
             try {
                 this.keyValueSeparator = keyValueSeparator.getBytes("UTF-8");
@@ -110,7 +110,7 @@ public class ClickhouseJDBCOutputFormat extends TextOutputFormat<NullWritable, T
 
         }
 
-        public ClickhouseJDBCRecordWriter(DataOutputStream output, ClickhouseJDBCConfiguration configuration){
+        public ClickhouseJDBCRecordWriter(DataOutputStream output, ClickhouseConfiguration configuration){
             this(output, configuration, "\t");
         }
 

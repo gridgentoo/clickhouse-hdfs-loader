@@ -7,4 +7,14 @@ public class ConfigurationOptions {
 
     public static final String MAPPER_MAP_SPECULATIVE_EXECUTION = "mapreduce.map.speculative" ;//设置Map推测执行task
     public static final String REDUCE_MAP_SPECULATIVE_EXECUTION = "reduce.map.speculative" ;//设置Map推测执行task
+
+    public static final int     DEFAULT_CLICKHOUSE_HTTP_PORT = 8123;
+    public static final int     DEFAULT_SHARDING_KEY_INDEX   = -1;
+    public static final String  DEFAULT_DATABASE = "default";
+    public static final String  DEFAULT_TEMP_DATABASE = "temp";
+    public static final String  DEFAULT_CLICKHOUSE_HOST = "localhost";
+    public static final int     DEFAULT_LOADER_TASK_EXECUTOR = 1;
+
+    public static final String  RULE_OF_APPEND_DAILY_TABLE = "append";
+    public static final String  RULE_OF_DROP_DAILY_TABLE   = "drop";
 }
