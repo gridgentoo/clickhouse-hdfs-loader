@@ -1,12 +1,16 @@
 package com.kugou.loader.clickhouse.mapper;
 
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
+import com.kugou.loader.clickhouse.config.ConfigurationKeys;
+import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.orc.mapred.OrcStruct;
 
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Created by jaykelin on 2016/11/24.
@@ -19,11 +23,10 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
         String nullNonString = "";
         String nullString = "";
         String replaceChar = clickhouseJDBCConfiguration.getReplaceChar();
-        String dt = clickhouseJDBCConfiguration.getDt();
         StringBuilder row = new StringBuilder();
         for(int i = 0; i < value.getNumFields(); i++){
             if(i != 0) {
-                row.append('\t');
+                row.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR);
             }
             WritableComparable fieldVaule = value.getFieldValue(i);
             String field;
@@ -39,13 +42,12 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
                 }else if(field.equalsIgnoreCase("NULL")) {
                     field = nullString;
                 }else {
-                    field = field.replace('\t', replaceChar.charAt(0));
+                    field = field.replace(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR, replaceChar.charAt(0));
                     field = field.replace('\\', '/');
                 }
             }
             row.append(field);
         }
-        row.append('\t').append(dt);
 
         return row.toString();
     }

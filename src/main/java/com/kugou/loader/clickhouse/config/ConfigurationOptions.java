@@ -14,6 +14,10 @@ public class ConfigurationOptions {
     public static final String  DEFAULT_TEMP_DATABASE = "temp";
     public static final String  DEFAULT_CLICKHOUSE_HOST = "localhost";
     public static final int     DEFAULT_LOADER_TASK_EXECUTOR = 1;
+    public static final char    DEFAULT_RESULT_FIELD_SPERATOR = '\t';
+    public static final String  DEFAULT_RESULT_NULL_STRING = "";
+    public static final String  DEFAULT_RESULT_NULL_NON_STRING = "";
+    public static final boolean DEFAULT_EXTRACT_HIVE_PARTITIONS = true;
 
     public static final String  RULE_OF_APPEND_DAILY_TABLE = "append";
     public static final String  RULE_OF_DROP_DAILY_TABLE   = "drop";

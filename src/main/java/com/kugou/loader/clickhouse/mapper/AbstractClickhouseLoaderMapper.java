@@ -14,12 +14,16 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Mapper;
 
 import java.io.IOException;
 import java.sql.*;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Created by jaykelin on 2016/11/24.
@@ -27,6 +31,8 @@ import java.util.Map;
 public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VALUEOUT> extends Mapper<KEYIN, VALUEIN, KEYOUT, VALUEOUT>{
 
     private static final Log log = LogFactory.getLog(AbstractClickhouseLoaderMapper.class);
+
+    private static final Pattern HIVE_PARTITIONS_PATTERN = Pattern.compile("([0-9a-zA-Z]+)=([0-9a-zA-Z_\\-]+)/?");
 
     protected int               maxTries;
     protected int               batchSize;
@@ -36,6 +42,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     protected int               clickhouseDistributedTableShardingKeyIndex = -1;
     protected String            sqlHeader;                                          // INSERT INTO <tempTable or tempDistributedTable> FORMET <CSV|Tabxxx>
     protected Map<String, HostRecordsCache> hostRecords = Maps.newHashMap();
+    protected Map<String, String> hivePartitions = Maps.newLinkedHashMap();
 
     private String              tempTable;                                          // temp.tableA_timestamp_m_\d{6}_\d
     private String              tempDistributedTable = null;                        // temp.tableA_timestamp_m_\d{6}_\d_distributed
@@ -73,6 +80,8 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 //            createTempTable(config, statement, createTableDDL, 0, null);
 
             clickhouseDistributedTableShardingKeyIndex = config.getInt(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX, ConfigurationOptions.DEFAULT_SHARDING_KEY_INDEX);
+
+            hivePartitions = extractHivePartitions(config);
 
             log.info("Clickhouse JDBC : distributed table sharding key["+clickhouseDistributedTableShardingKey+"] index["+clickhouseDistributedTableShardingKeyIndex+"]");
         } catch (ClassNotFoundException e) {
@@ -119,6 +128,18 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     @Override
     protected void map(KEYIN key, VALUEIN value, Context context) throws IOException, InterruptedException {
         String line = readLine(key, value, context);
+        Configuration conf = context.getConfiguration();
+        if (conf.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS)){
+            StringBuffer partitions = new StringBuffer();
+            Iterator<Map.Entry<String, String>> it = hivePartitions.entrySet().iterator();
+            while(it.hasNext()){
+                Map.Entry<String, String> entry = it.next();
+                partitions.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR).append(entry.getValue());
+            }
+            if (partitions.length() > 0){
+                line += partitions.toString();
+            }
+        }
         write(key, line, context);
     }
 
@@ -349,6 +370,30 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             createTempTable(config, host, ddl, tries+1, e);
         }
 
+    }
+
+    /**
+     * 从路径抽取hive partition
+     * @param configuration
+     * @return
+     */
+    protected Map<String, String> extractHivePartitions(ClickhouseConfiguration configuration){
+        String inputPath = configuration.get(ConfigurationKeys.CLI_P_EXPORT_DIR);
+        if(StringUtils.isBlank(inputPath)){
+            throw new IllegalArgumentException("Clickhouse JDBC : OMS! export-dir can't by empty!");
+        }
+        Map<String, String> hivePartitions = Maps.newLinkedHashMap();
+        Matcher m = HIVE_PARTITIONS_PATTERN.matcher(inputPath);
+        while(m.find()){
+            if(m.groupCount() >= 2){
+                String key = m.group(1);
+                String value = m.group(2);
+                if (StringUtils.isNotEmpty(key) && StringUtils.isNotEmpty(value)){
+                    hivePartitions.put(key, value);
+                }
+            }
+        }
+        return hivePartitions;
     }
 
 

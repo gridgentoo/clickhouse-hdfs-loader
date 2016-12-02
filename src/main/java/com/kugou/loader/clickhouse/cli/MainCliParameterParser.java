@@ -62,10 +62,13 @@ public class MainCliParameterParser {
     public String mode = "append";
 
     @Option(name="--daily", required = false, usage = "true or false")
-    public boolean daily = false;
+    public String daily = "false";
 
     @Option(name="--loader-task-executor", required = false, usage = "")
     public int loaderTaskExecute=1;
+
+    @Option(name="--extract-hive-partitions", required = false, usage = "")
+    public String extractHivePartitions = "false";
 
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);

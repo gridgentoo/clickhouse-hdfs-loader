@@ -2,7 +2,16 @@ package com.kugou.test;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
+import com.kugou.loader.clickhouse.config.ConfigurationKeys;
+import com.kugou.loader.clickhouse.mapper.AbstractClickhouseLoaderMapper;
+import com.kugou.loader.clickhouse.mapper.OrcLoaderMapper;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Mapper;
 
+import java.io.IOException;
+import java.util.Map;
+import java.util.StringTokenizer;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -56,5 +65,58 @@ public class Test {
         System.out.println(("1".hashCode() & Integer.MAX_VALUE) % 3);
         System.out.println(("2".hashCode() & Integer.MAX_VALUE) % 3);
         System.out.println(("3".hashCode() & Integer.MAX_VALUE) % 3);
+    }
+
+    @org.junit.Test
+    public void extractHivePartition(){
+        Configuration conf = new Configuration();
+        conf.set(ConfigurationKeys.CLI_P_EXPORT_DIR, "/user/hive/warehouse/dsl.db/dwf_list_play_d/dt=2016-10-01/pt=ios");
+        final ClickhouseConfiguration configuration = new ClickhouseConfiguration(conf);
+        AbstractClickhouseLoaderMapper mapper = new AbstractClickhouseLoaderMapper() {
+            @Override
+            public String readLine(Object key, Object value, Context context) {
+                Map<String, String> hivePartitions = this.extractHivePartitions(configuration);
+                for (String k : hivePartitions.keySet()){
+                    System.out.println(k+ "===>" + hivePartitions.get(k));
+                }
+                return null;
+            }
+
+            @Override
+            public void write(String host, String hostIndex, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
+
+            }
+        };
+
+        mapper.readLine(null , null, null);
+    }
+
+    @org.junit.Test
+    public void textFileInputTest(){
+        String line = "|pc|爱出发+魔法城堡+青春修炼手册|563|656|656562|-53|-23||||||";
+        String s = "|";
+        StringTokenizer tokenizer = new StringTokenizer(line, s, false);
+        int i = 0;
+
+
+        int start = 0;
+        int end = 0;
+        for(int j = 0; j < line.length(); j++){
+            if(line.charAt(j) == s.charAt(0)){
+                i ++ ;
+                end = j;
+                System.out.println("==>"+line.substring(start, end));
+                start = j+1;
+            }
+        }
+        if (start == line.length()){
+            i ++ ;
+            System.out.println("==>"+"");
+        }else if(start < line.length()){
+            i ++ ;
+            System.out.println("==>"+line.substring(start));
+        }
+
+        System.out.println(i);
     }
 }

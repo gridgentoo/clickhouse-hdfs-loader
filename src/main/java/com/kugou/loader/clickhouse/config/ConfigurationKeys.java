@@ -19,6 +19,7 @@ public class ConfigurationKeys {
     public final static String CLI_P_MAXTRIES = "max-tries";
     public final static String CLI_P_CLICKHOUSE_HTTP_PORT = "clickhouse-http-port";
     public final static String CLI_P_LOADER_TASK_EXECUTOR = "loader-task-executor";
+    public final static String CLI_P_EXTRACT_HIVE_PARTITIONS = "extract-hive-partitions";
 
     public final static String LOADER_TEMP_TABLE_PREFIX = "loader_temp_table_prefix";
     public final static String CL_TARGET_TABLE_DATABASE = "cl_target_table_database";

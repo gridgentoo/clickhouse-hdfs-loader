@@ -1,6 +1,7 @@
 package com.kugou.loader.clickhouse;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.kugou.loader.clickhouse.cli.MainCliParameterParser;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
@@ -8,6 +9,7 @@ import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import com.kugou.loader.clickhouse.mapper.partitioner.HostSequencePartitioner;
 import com.kugou.loader.clickhouse.reducer.ClickhouseLoaderReducer;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -27,6 +29,7 @@ import org.apache.hadoop.util.ToolRunner;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -76,6 +79,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         conf.setInt(ConfigurationKeys.CLI_P_MAXTRIES, cliParameterParser.maxTries);
         conf.setInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, cliParameterParser.clickhouseHttpPort);
         conf.setInt(ConfigurationKeys.CLI_P_LOADER_TASK_EXECUTOR, cliParameterParser.loaderTaskExecute);
+        conf.setBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, BooleanUtils.toBoolean(cliParameterParser.extractHivePartitions, "true", "false"));
 
         // generate temp table name
         String tempTablePrefix = cliParameterParser.table+"_"+
@@ -86,7 +90,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         // init clickhouse parameters
         initClickhouseParameters(conf, cliParameterParser);
 
-        if(cliParameterParser.daily){
+        if(BooleanUtils.toBoolean(cliParameterParser.daily, "true", "false")){
             // create local daily table
             createTargetDailyTable(conf, targetLocalTable, cliParameterParser.mode);
         }
