@@ -18,7 +18,24 @@ public class ConfigurationOptions {
     public static final String  DEFAULT_RESULT_NULL_STRING = "";
     public static final String  DEFAULT_RESULT_NULL_NON_STRING = "";
     public static final boolean DEFAULT_EXTRACT_HIVE_PARTITIONS = true;
+    public static final int     DEFAULT_MAX_TRIES = 3;
 
     public static final String  RULE_OF_APPEND_DAILY_TABLE = "append";
     public static final String  RULE_OF_DROP_DAILY_TABLE   = "drop";
+
+
+    public enum DailyExpiresProcess{
+        MERGE("merge"), DROP("drop");
+
+        private String type;
+
+        DailyExpiresProcess(String type){
+            this.type = type;
+        }
+
+        @Override
+        public String toString() {
+            return this.type;
+        }
+    }
 }

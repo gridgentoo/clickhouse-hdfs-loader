@@ -54,6 +54,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     private Map<String, String> sqlResultCache = Maps.newHashMap();
     private String              clickhouseDistributedTableShardingKey = null;
     private HashFunction        hashFn = Hashing.murmur3_128();
+    private List<Integer>       excludeFieldIndexs = Lists.newArrayList();
 
 
     @Override
@@ -275,6 +276,15 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 clickhouseClusterHostList.add(configuration.extractHostFromConnectionUrl());
             }
 
+            String excludeFieldIndexsParameter = configuration.get(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS);
+            if(StringUtils.isNotBlank(excludeFieldIndexsParameter)){
+                Pattern p = Pattern.compile("(\\d+)");
+                Matcher m = p.matcher(excludeFieldIndexsParameter);
+                while(m.find()){
+                    excludeFieldIndexs.add(Integer.valueOf(m.group(1)));
+                }
+            }
+
             // Not for insert into temp distributed table
             this.sqlHeader = "INSERT INTO temp."+ this.tempTable +" FORMAT "+configuration.getClickhouseFormat();
             log.info("Clickhouse JDBC : INSERT USING header["+sqlHeader+"]");
@@ -394,6 +404,10 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             }
         }
         return hivePartitions;
+    }
+
+    protected List<Integer> getExcludeFieldIndexs(){
+        return excludeFieldIndexs;
     }
 
 

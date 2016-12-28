@@ -6,7 +6,6 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.io.Text;
 
 import java.io.IOException;
-import java.util.StringTokenizer;
 
 /**
  * Created by jaykelin on 2016/11/29.
@@ -32,13 +31,15 @@ public class TextLoaderMapper extends AbstractClickhouseLoaderMapper<Object, Tex
                 if (index == clickhouseDistributedTableShardingKeyIndex){
                     clickhouseDistributedTableShardingKeyValue = field;
                 }
-                index ++;
                 start = i+1;
+                if (getExcludeFieldIndexs().contains(index++)){
+                    continue;
+                }
 
                 if(line.length() > 0){
                     line.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR);
                 }
-                if(field.equals("\\N")){
+                if(field.equals("\\\\N") || field.equals("/N")){
                     raw = StringUtils.isBlank(nullNonString)?ConfigurationOptions.DEFAULT_RESULT_NULL_NON_STRING:nullNonString;
                 }else{
                     field = field.replace(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR, replaceChar.charAt(0));

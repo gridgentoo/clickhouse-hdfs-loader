@@ -8,6 +8,7 @@ import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import com.kugou.loader.clickhouse.mapper.partitioner.HostSequencePartitioner;
 import com.kugou.loader.clickhouse.reducer.ClickhouseLoaderReducer;
+import com.kugou.loader.clickhouse.task.OldDailyMergeTask;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
@@ -28,8 +29,9 @@ import org.apache.hadoop.util.ToolRunner;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -80,6 +82,9 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         conf.setInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, cliParameterParser.clickhouseHttpPort);
         conf.setInt(ConfigurationKeys.CLI_P_LOADER_TASK_EXECUTOR, cliParameterParser.loaderTaskExecute);
         conf.setBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, BooleanUtils.toBoolean(cliParameterParser.extractHivePartitions, "true", "false"));
+        if(StringUtils.isNotBlank(cliParameterParser.excludeFieldIndexs)){
+            conf.set(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS, cliParameterParser.excludeFieldIndexs);
+        }
 
         // generate temp table name
         String tempTablePrefix = cliParameterParser.table+"_"+
@@ -91,8 +96,22 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         initClickhouseParameters(conf, cliParameterParser);
 
         if(BooleanUtils.toBoolean(cliParameterParser.daily, "true", "false")){
+            String targetTable = cliParameterParser.table;
+            if(targetTable.contains(".")){
+                targetTable = targetTable.substring(targetTable.indexOf(".")+1);
+            }
             // create local daily table
-            createTargetDailyTable(conf, targetLocalTable, cliParameterParser.mode);
+            createTargetDailyTable(conf, StringUtils.isNotBlank(targetLocalTable)?targetLocalTable:targetTable, cliParameterParser.mode);
+
+            Thread mergeWorker = new Thread(new OldDailyMergeTask(conf, cliParameterParser.dailyExpires, cliParameterParser.dailyExpiresProcess, clickhouseClusterHosts));
+            mergeWorker.start();
+            try  {
+                mergeWorker.join() ;
+            }  catch  ( InterruptedException e) {
+                e.printStackTrace();
+            }
+//            // merge and drop old daily table
+//            mergeAndDropOldDailyTable(conf, cliParameterParser.dailyExpires, cliParameterParser.dailyExpiresProcess, StringUtils.isNotBlank(targetLocalTable)?targetLocalTable:targetTable);
         }
 
         Job job = Job.getInstance(conf);
@@ -297,6 +316,77 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         }
 
         configuration.set(ConfigurationKeys.CL_TARGET_LOCAL_DAILY_TABLE_FULLNAME, targetLocalDailyTableFullName);
+    }
+
+    /**
+     * merge and drop old daily table
+     *
+     * @param dailyExpires
+     * @param dailyExpiresProcess
+     * @deprecated
+     */
+    private void mergeAndDropOldDailyTable(Configuration configuration, int dailyExpires, String dailyExpiresProcess, String targetLocalTable) throws SQLException, ClassNotFoundException {
+        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT));
+        String localDatabase    = (StringUtils.isNotBlank(configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE)) ? configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE) : targetTableDatabase);
+        Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.DAY_OF_MONTH, dailyExpires);
+        SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
+        String lastDailyTable = targetLocalTable + "_" + df.format(cal.getTime());
+        String targetTableFullname = localDatabase + "." +targetLocalTable;
+
+
+        if(targetTableIsDistributed){
+            for (String host : clickhouseClusterHosts){
+                client = ClickhouseClientHolder.getClickhouseClient(host,
+                        configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
+                        configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE));
+                ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and name > '" + lastDailyTable + "'");
+                List<String> oldDailyTableName = Lists.newArrayList();
+                while(ret.next()){
+                    String dailyTable = ret.getString(1);
+                    if(StringUtils.isNotBlank(dailyTable)){
+                        oldDailyTableName.add(dailyTable);
+                    }
+                }
+                ret.close();
+                if(CollectionUtils.isEmpty(oldDailyTableName)){
+                    log.info("Clickhouse Loader : Cannot found any old daily table before ["+lastDailyTable+"] for ["+targetTableFullname+"]");
+                    return ;
+                }
+                for(String table : oldDailyTableName){
+                    String oldDailyTableFullname = localDatabase +"." +table;
+                    log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"] on host["+host+"]");
+                    if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
+                        log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
+                        client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" FROM SELECT * FROM "+oldDailyTableFullname);
+                    }
+                    client.dropTableIfExists(oldDailyTableFullname);
+                }
+            }
+        }else{
+            ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and name > '" + lastDailyTable + "'");
+            List<String> oldDailyTableName = Lists.newArrayList();
+            while(ret.next()){
+                String dailyTable = ret.getString(1);
+                if(StringUtils.isNotBlank(dailyTable)){
+                    oldDailyTableName.add(dailyTable);
+                }
+            }
+            ret.close();
+            if(CollectionUtils.isEmpty(oldDailyTableName)){
+                log.info("Clickhouse Loader : Cannot found any old daily table before ["+lastDailyTable+"] for ["+targetTableFullname+"]");
+                return ;
+            }
+            for(String table : oldDailyTableName){
+                String oldDailyTableFullname = localDatabase +"." +table;
+                log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"].");
+                if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
+                    log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
+                    client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" FROM SELECT * FROM "+oldDailyTableFullname);
+                }
+                client.dropTableIfExists(oldDailyTableFullname);
+            }
+        }
     }
 
 }

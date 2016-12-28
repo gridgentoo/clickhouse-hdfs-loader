@@ -65,6 +65,11 @@ public class Test {
         System.out.println(("1".hashCode() & Integer.MAX_VALUE) % 3);
         System.out.println(("2".hashCode() & Integer.MAX_VALUE) % 3);
         System.out.println(("3".hashCode() & Integer.MAX_VALUE) % 3);
+
+
+        System.out.println("-----------------");
+        String s = "\tsdfwef|\tsdsdsdfe\t";
+        System.out.println(s.replace('\t', " ".charAt(0)));
     }
 
     @org.junit.Test

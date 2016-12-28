@@ -25,19 +25,22 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
         String replaceChar = clickhouseJDBCConfiguration.getReplaceChar();
         StringBuilder row = new StringBuilder();
         for(int i = 0; i < value.getNumFields(); i++){
+            if (getExcludeFieldIndexs().contains(i)){
+                continue;
+            }
             if(i != 0) {
                 row.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR);
             }
-            WritableComparable fieldVaule = value.getFieldValue(i);
+            WritableComparable fieldValue = value.getFieldValue(i);
             String field;
-            if(null == fieldVaule){
+            if(null == fieldValue){
                 field = nullString;
             }else{
-                field = fieldVaule.toString();
+                field = fieldValue.toString();
                 if (i == clickhouseDistributedTableShardingKeyIndex){
                     clickhouseDistributedTableShardingKeyValue = field;
                 }
-                if(field.equals("\\N")){
+                if(field.equals("\\\\N")){
                     field = nullNonString;
                 }else if(field.equalsIgnoreCase("NULL")) {
                     field = nullString;

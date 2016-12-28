@@ -70,6 +70,15 @@ public class MainCliParameterParser {
     @Option(name="--extract-hive-partitions", required = false, usage = "")
     public String extractHivePartitions = "false";
 
+    @Option(name="--daily-expires", required = false, usage = "")
+    public int dailyExpires = 7;
+
+    @Option(name="--daily-expires-process", required = false, usage = "")
+    public String dailyExpiresProcess = "merge";
+
+    @Option(name="--exclude-fields", required = false, usage = "----exclude-fields 0,2,3,4")
+    public String excludeFieldIndexs = null;
+
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }
