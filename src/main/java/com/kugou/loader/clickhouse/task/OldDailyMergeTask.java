@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -66,6 +67,7 @@ public class OldDailyMergeTask implements Runnable{
                     configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
             String localDatabase    = (StringUtils.isNotBlank(configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE)) ? configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE) : configuration.get(ConfigurationKeys.CL_TARGET_TABLE_DATABASE));
             Calendar cal = Calendar.getInstance();
+            cal.setTime((new SimpleDateFormat("yyyy-MM-dd")).parse(configuration.get(ConfigurationKeys.CLI_P_DT)));
             cal.add(Calendar.DAY_OF_MONTH, -dailyExpires);
             SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
             String lastDailyTable = targetLocalTable + "_" + df.format(cal.getTime());
@@ -78,7 +80,7 @@ public class OldDailyMergeTask implements Runnable{
                             configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
                             configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
                             configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
-                    ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and name > '" + lastDailyTable + "'");
+                    ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and match(name, '\\\\d{8}$') and name < '" + lastDailyTable + "'");
                     List<String> oldDailyTableName = Lists.newArrayList();
                     while(ret.next()){
                         String dailyTable = ret.getString(1);
@@ -96,13 +98,13 @@ public class OldDailyMergeTask implements Runnable{
                         log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"] on host["+host+"]");
                         if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
                             log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
-                            client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" FROM SELECT * FROM "+oldDailyTableFullname);
+                            client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" SELECT * FROM "+oldDailyTableFullname);
                         }
                         client.dropTableIfExists(oldDailyTableFullname);
                     }
                 }
             }else{
-                ResultSet ret = client.executeQuery("select name from system.tables where database='" + localDatabase + "' and name > '" + lastDailyTable + "'");
+                ResultSet ret = client.executeQuery("select name from system.tables where database='" + localDatabase + "' and match(name, '\\\\d{8}$') and name <= '" + lastDailyTable + "'");
                 List<String> oldDailyTableName = Lists.newArrayList();
                 while(ret.next()){
                     String dailyTable = ret.getString(1);
@@ -120,7 +122,7 @@ public class OldDailyMergeTask implements Runnable{
                     log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"].");
                     if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
                         log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
-                        client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" FROM SELECT * FROM "+oldDailyTableFullname);
+                        client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" SELECT * FROM "+oldDailyTableFullname);
                     }
                     client.dropTableIfExists(oldDailyTableFullname);
                 }

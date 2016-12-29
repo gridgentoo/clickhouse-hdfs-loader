@@ -1,5 +1,6 @@
 package com.kugou.loader.clickhouse.cli;
 
+import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -74,7 +75,7 @@ public class MainCliParameterParser {
     public int dailyExpires = 7;
 
     @Option(name="--daily-expires-process", required = false, usage = "")
-    public String dailyExpiresProcess = "merge";
+    public String dailyExpiresProcess = ConfigurationOptions.DailyExpiresProcess.MERGE.toString();
 
     @Option(name="--exclude-fields", required = false, usage = "----exclude-fields 0,2,3,4")
     public String excludeFieldIndexs = null;
