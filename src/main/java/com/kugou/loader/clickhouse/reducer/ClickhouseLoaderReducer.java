@@ -13,7 +13,6 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Reducer;
 
 import java.io.IOException;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Iterator;
@@ -33,39 +32,20 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
 
     private int maxTries;
 
-    private Connection connection;
-
     @Override
     protected void setup(Context context) throws IOException, InterruptedException {
         ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
 
         this.maxTries = clickhouseJDBCConfiguration.getMaxTries();
-        try {
-            this.connection = clickhouseJDBCConfiguration.getConnection();
 
-            // init env
-            initTempEnv(clickhouseJDBCConfiguration);
-
-        } catch (ClassNotFoundException e) {
-            log.error(e.getMessage(), e);
-            throw new IOException(e.getMessage(), e);
-        } catch (SQLException e) {
-            log.error(e.getMessage(), e);
-            throw new IOException(e.getMessage(), e);
-        }
+        // init env
+        initTempEnv(clickhouseJDBCConfiguration);
 
         super.setup(context);
     }
 
     @Override
     protected void cleanup(Context context) throws IOException, InterruptedException {
-        try{
-            if(null != connection){
-                this.connection.close();
-            }
-        } catch (SQLException e){
-            log.warn(e.getMessage(), e);
-        }
         super.cleanup(context);
     }
 
@@ -84,10 +64,16 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
             String targetTable = clickhouseJDBCConfiguration.getTableName();
             if(targetIsDistributeTable){
                 targetTable = distributedLocalDatabase + "." + targetTable;
-                client = ClickhouseClientHolder.getClickhouseClient(host, clickhouseJDBCConfiguration.getClickhouseHttpPort(),distributedLocalDatabase);
+                client = ClickhouseClientHolder.getClickhouseClient(host, clickhouseJDBCConfiguration.getClickhouseHttpPort(),distributedLocalDatabase,
+                        clickhouseJDBCConfiguration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
+                        clickhouseJDBCConfiguration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD)
+                );
             }else{
                 targetTable = clickhouseJDBCConfiguration.getDatabase()+"."+targetTable;
-                client = ClickhouseClientHolder.getClickhouseClient(host, clickhouseJDBCConfiguration.getClickhouseHttpPort(), clickhouseJDBCConfiguration.getDatabase());
+                client = ClickhouseClientHolder.getClickhouseClient(host, clickhouseJDBCConfiguration.getClickhouseHttpPort(), clickhouseJDBCConfiguration.getDatabase(),
+                            clickhouseJDBCConfiguration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
+                            clickhouseJDBCConfiguration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD)
+                        );
             }
             //创建日表
             String dailyTable = clickhouseJDBCConfiguration.get(ConfigurationKeys.CL_TARGET_LOCAL_DAILY_TABLE_FULLNAME);

@@ -79,6 +79,12 @@ public class MainCliParameterParser {
     @Option(name="--exclude-fields", required = false, usage = "----exclude-fields 0,2,3,4")
     public String excludeFieldIndexs = null;
 
+    @Option(name="--username", required = false, usage = "")
+    public String username = null;
+
+    @Option(name="--password", required = false, usage = "")
+    public String password = null;
+
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }

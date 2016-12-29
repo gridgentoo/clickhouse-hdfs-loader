@@ -85,6 +85,12 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         if(StringUtils.isNotBlank(cliParameterParser.excludeFieldIndexs)){
             conf.set(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS, cliParameterParser.excludeFieldIndexs);
         }
+        if(StringUtils.isNotBlank(cliParameterParser.username)){
+            conf.set(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME, cliParameterParser.username);
+        }
+        if(StringUtils.isNotBlank(cliParameterParser.password)){
+            conf.set(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD, cliParameterParser.password);
+        }
 
         // generate temp table name
         String tempTablePrefix = cliParameterParser.table+"_"+
@@ -166,7 +172,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
      * @throws ClassNotFoundException
      */
     private void initClickhouseParameters(Configuration configuration, MainCliParameterParser parser) throws SQLException, ClassNotFoundException {
-        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(parser.connect);
+        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(parser.connect, configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
         targetTableDatabase = extractTargetTableDatabase(parser.connect, parser.table);
         configuration.set(ConfigurationKeys.CL_TARGET_TABLE_DATABASE, targetTableDatabase);
         targetTableFullName = parser.table;
@@ -223,7 +229,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
 
     private int getClickhouseDistributedShardingKeyIndex(Configuration configuration) throws SQLException, ClassNotFoundException {
         String key = configuration.get(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY);
-        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT));
+        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
         int ret = -1;
         if (StringUtils.isNotBlank(key)){
             String sql = "describe "+configuration.get(ConfigurationKeys.CL_TARGET_TABLE_FULLNAME);
@@ -251,7 +257,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
      * @throws ClassNotFoundException
      */
     private void createTargetDailyTable(Configuration configuration, String targetLocalTable, String mode) throws SQLException, ClassNotFoundException {
-        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT));
+        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
         // daily table suffix
         String dailyTableSuffix = "_"+configuration.get(ConfigurationKeys.CLI_P_DT).replaceAll("-","");
         String localDatabase    = (StringUtils.isNotBlank(configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE)) ? configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE) : targetTableDatabase);
@@ -277,7 +283,8 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             for (String host : clickhouseClusterHosts){
                 client = ClickhouseClientHolder.getClickhouseClient(host,
                         configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
-                        configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE));
+                        configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
+                        configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
                 if (client.isTableExists(targetLocalDailyTableFullName)){
                     if (mode.equalsIgnoreCase(ConfigurationOptions.RULE_OF_DROP_DAILY_TABLE)){
                         log.info("Clickhouse Loader : host["+host+"] drop table ["+targetLocalTableFullName+"]");
@@ -326,7 +333,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
      * @deprecated
      */
     private void mergeAndDropOldDailyTable(Configuration configuration, int dailyExpires, String dailyExpiresProcess, String targetLocalTable) throws SQLException, ClassNotFoundException {
-        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT));
+        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
         String localDatabase    = (StringUtils.isNotBlank(configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE)) ? configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE) : targetTableDatabase);
         Calendar cal = Calendar.getInstance();
             cal.add(Calendar.DAY_OF_MONTH, dailyExpires);
@@ -339,7 +346,8 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             for (String host : clickhouseClusterHosts){
                 client = ClickhouseClientHolder.getClickhouseClient(host,
                         configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
-                        configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE));
+                        configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
+                        configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
                 ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and name > '" + lastDailyTable + "'");
                 List<String> oldDailyTableName = Lists.newArrayList();
                 while(ret.next()){

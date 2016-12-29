@@ -62,7 +62,8 @@ public class OldDailyMergeTask implements Runnable{
             throw new Exception("Clickhouse Loader try to merge and drop old daily table failed.", cause);
         }
         try{
-            ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT));
+            ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT),
+                    configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
             String localDatabase    = (StringUtils.isNotBlank(configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE)) ? configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE) : configuration.get(ConfigurationKeys.CL_TARGET_TABLE_DATABASE));
             Calendar cal = Calendar.getInstance();
             cal.add(Calendar.DAY_OF_MONTH, -dailyExpires);
@@ -75,7 +76,8 @@ public class OldDailyMergeTask implements Runnable{
                 for (String host : clickhouseClusterHosts){
                     client = ClickhouseClientHolder.getClickhouseClient(host,
                             configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
-                            configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE));
+                            configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
+                            configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
                     ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and name > '" + lastDailyTable + "'");
                     List<String> oldDailyTableName = Lists.newArrayList();
                     while(ret.next()){

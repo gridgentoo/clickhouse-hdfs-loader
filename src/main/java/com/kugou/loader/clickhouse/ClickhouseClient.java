@@ -33,7 +33,7 @@ public class ClickhouseClient {
         }
     }
 
-    public ClickhouseClient(String connectionUrl) throws SQLException, ClassNotFoundException {
+    public ClickhouseClient(String connectionUrl) throws SQLException {
         this(connectionUrl, null, null);
     }
 
@@ -47,7 +47,7 @@ public class ClickhouseClient {
         this.statement = this.connection.createStatement();
     }
 
-    public ClickhouseClient(String host, int port, String database) throws SQLException, ClassNotFoundException {
+    public ClickhouseClient(String host, int port, String database) throws SQLException {
         this(host, port, database, null, null, driver);
     }
 
@@ -142,6 +142,10 @@ public class ClickhouseClient {
         }catch (SQLException e){
             log.warn(e);
         }
+    }
+
+    public Connection getConnection(){
+        return this.connection;
     }
 
 }

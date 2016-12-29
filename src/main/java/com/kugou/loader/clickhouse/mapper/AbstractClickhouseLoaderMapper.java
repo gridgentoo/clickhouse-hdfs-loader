@@ -36,8 +36,8 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 
     protected int               maxTries;
     protected int               batchSize;
-    protected Connection        connection;
-    protected Statement         statement;
+//    protected Connection        connection;
+//    protected Statement         statement;
     protected String            clickhouseDistributedTableShardingKeyValue = null;
     protected int               clickhouseDistributedTableShardingKeyIndex = -1;
     protected String            sqlHeader;                                          // INSERT INTO <tempTable or tempDistributedTable> FORMET <CSV|Tabxxx>
@@ -55,18 +55,17 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     private String              clickhouseDistributedTableShardingKey = null;
     private HashFunction        hashFn = Hashing.murmur3_128();
     private List<Integer>       excludeFieldIndexs = Lists.newArrayList();
+    private ClickhouseConfiguration config;
 
 
     @Override
     protected void setup(Context context) throws IOException, InterruptedException {
 
         log.info("Clickhouse JDBC : Mapper Setup.");
-        ClickhouseConfiguration config = new ClickhouseConfiguration(context.getConfiguration());
+        config = new ClickhouseConfiguration(context.getConfiguration());
         this.maxTries = config.getMaxTries();
         this.batchSize = config.getBatchSize();
         try {
-            this.connection = config.getConnection();
-            this.statement = this.connection.createStatement();
             this.tempTable = getTempTableName(context);
 
             // 初始化参数
@@ -105,16 +104,6 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 cache.ready = true;
                 batchInsert(host, config.getClickhouseHttpPort(), cache, 0);
             }
-        }
-        try{
-            if(null != statement){
-                this.statement.close();
-            }
-            if(null != connection){
-                this.connection.close();
-            }
-        }catch (Exception e){
-            e.printStackTrace();
         }
 
         int loaderTaskExecutor = config.getInt(ConfigurationKeys.CLI_P_LOADER_TASK_EXECUTOR, ConfigurationOptions.DEFAULT_LOADER_TASK_EXECUTOR);
@@ -211,7 +200,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 long l = System.currentTimeMillis();
                 if(cache.ready){
                     log.info("Clickhouse JDBC : batch_commit["+tries+"] host["+host+"] start. batchsize="+cache.recordsCount);
-                    ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, port, ConfigurationOptions.DEFAULT_TEMP_DATABASE);
+                    ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, port, ConfigurationOptions.DEFAULT_TEMP_DATABASE, config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
                     client.insert(cache.records.toString());
                     log.info("Clickhouse JDBC : batch_commit["+tries+"] host["+host+"] end. take time "+(System.currentTimeMillis() - l)+"ms.");
                     // 清空
@@ -258,7 +247,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             clickhouseDistributedTableShardingKey = configuration.get(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY);
 
             if(StringUtils.isNotBlank(clickhouseClusterName)){
-                ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.getConnectUrl());
+                ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.getConnectUrl(), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
                 this.targetIsDistributeTable = true;
                 ResultSet ret = client.executeQuery("select distinct host_address from system.clusters where cluster='"+this.clickhouseClusterName+"'");
                 while(ret.next()){
@@ -339,9 +328,13 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         if (!sqlResultCache.containsKey(showCreateTableSql)){
             Statement statement = null;
             try {
-                statement = this.connection.createStatement();
+                ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(
+                        config.getConnectUrl(),
+                        config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
+                        config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD)
+                );
                 log.info("Clickhouse JDBC : execute sql["+showCreateTableSql+"].");
-                ResultSet ret = statement.executeQuery(showCreateTableSql);
+                ResultSet ret = client.executeQuery(showCreateTableSql);
                 if(ret.next()){
                     ddl = ret.getString(1);
                 }else{
@@ -369,7 +362,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             throw new IOException("Clickhouse JDBC : create temp table[temp."+this.tempTable+"] for host["+host+"] failed.", cause);
         }
         try{
-            ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, config.getClickhouseHttpPort(), ConfigurationOptions.DEFAULT_TEMP_DATABASE);
+            ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, config.getClickhouseHttpPort(), ConfigurationOptions.DEFAULT_TEMP_DATABASE, config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
             client.executeUpdate(ddl);
         }catch (SQLException e){
             log.warn("Clickhouse JDBC : Create temp table for host["+host+"] failed. tries : "+tries+" : "+e.getMessage(), e);
