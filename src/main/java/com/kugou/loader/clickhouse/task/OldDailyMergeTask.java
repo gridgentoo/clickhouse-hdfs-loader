@@ -75,6 +75,7 @@ public class OldDailyMergeTask implements Runnable{
             boolean targetTableIsDistributed = configuration.getBoolean(ConfigurationKeys.CL_TARGET_TABLE_IS_DISTRIBUTED, false);
 
             if(targetTableIsDistributed){
+                // merge and drop local table
                 for (String host : clickhouseClusterHosts){
                     client = ClickhouseClientHolder.getClickhouseClient(host,
                             configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
@@ -101,6 +102,8 @@ public class OldDailyMergeTask implements Runnable{
                             client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" SELECT * FROM "+oldDailyTableFullname);
                         }
                         client.dropTableIfExists(oldDailyTableFullname);
+                        // drop distributed table
+                        client.dropTableIfExists(configuration.get(ConfigurationKeys.CL_TARGET_TABLE_DATABASE)+"."+table);
                     }
                 }
             }else{
