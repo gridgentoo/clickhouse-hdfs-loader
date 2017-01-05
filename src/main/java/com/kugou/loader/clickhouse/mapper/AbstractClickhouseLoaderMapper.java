@@ -209,6 +209,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             }else{
                 if(cache.ready){
                     log.error("Clickhouse JDBC : host["+host+"]" + maxTries + " times tries all failed. batchsize=" + cache.recordsCount);
+                    log.warn("Clickhouse JDBC : ERROR Data :\n"+cache.records.toString());
                     // TODO 所有尝试都失败了
                     cache.reset();
                 }

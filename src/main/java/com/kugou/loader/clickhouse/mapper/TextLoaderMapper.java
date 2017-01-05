@@ -15,7 +15,7 @@ public class TextLoaderMapper extends AbstractClickhouseLoaderMapper<Object, Tex
     @Override
     public String readLine(Object key, Text value, Context context) {
         ClickhouseConfiguration config = new ClickhouseConfiguration(context.getConfiguration());
-        char sperator = config.getFieldsTerminatedBy().charAt(0);
+        char separator = config.getFieldsTerminatedBy().charAt(0);
         String nullNonString = config.getNullNonString();
         String replaceChar = config.getReplaceChar();
 
@@ -25,7 +25,7 @@ public class TextLoaderMapper extends AbstractClickhouseLoaderMapper<Object, Tex
         int end   = 0;
         String raw = value.toString();
         for(int i = 0; i < raw.length(); i++){
-            if(raw.charAt(i) == sperator){
+            if(raw.charAt(i) == separator){
                 end = i;
                 String field = raw.substring(start, end);
                 if (index == clickhouseDistributedTableShardingKeyIndex){
