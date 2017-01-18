@@ -72,7 +72,7 @@ public class MainCliParameterParser {
     public String extractHivePartitions = "false";
 
     @Option(name="--daily-expires", required = false, usage = "")
-    public int dailyExpires = 7;
+    public int dailyExpires = 3;
 
     @Option(name="--daily-expires-process", required = false, usage = "")
     public String dailyExpiresProcess = ConfigurationOptions.DailyExpiresProcess.MERGE.toString();

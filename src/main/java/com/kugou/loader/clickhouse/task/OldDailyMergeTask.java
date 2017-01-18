@@ -81,7 +81,7 @@ public class OldDailyMergeTask implements Runnable{
                             configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
                             configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
                             configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
-                    ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and match(name, '\\\\d{8}$') and name < '" + lastDailyTable + "'");
+                    ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and match(name, '"+targetLocalTable+"_\\\\d{8}$') and name < '" + lastDailyTable + "'");
                     List<String> oldDailyTableName = Lists.newArrayList();
                     while(ret.next()){
                         String dailyTable = ret.getString(1);
@@ -107,7 +107,7 @@ public class OldDailyMergeTask implements Runnable{
                     }
                 }
             }else{
-                ResultSet ret = client.executeQuery("select name from system.tables where database='" + localDatabase + "' and match(name, '\\\\d{8}$') and name <= '" + lastDailyTable + "'");
+                ResultSet ret = client.executeQuery("select name from system.tables where database='" + localDatabase + "' and match(name, '"+targetLocalTable+"_\\\\d{8}$') and name <= '" + lastDailyTable + "'");
                 List<String> oldDailyTableName = Lists.newArrayList();
                 while(ret.next()){
                     String dailyTable = ret.getString(1);
