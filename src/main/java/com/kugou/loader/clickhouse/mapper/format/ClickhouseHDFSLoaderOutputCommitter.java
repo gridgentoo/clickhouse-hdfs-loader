@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 
 /**
  * Created by jaykelin on 2016/11/10.
+ * @deprecated
  */
 public class ClickhouseHDFSLoaderOutputCommitter extends FileOutputCommitter {
 

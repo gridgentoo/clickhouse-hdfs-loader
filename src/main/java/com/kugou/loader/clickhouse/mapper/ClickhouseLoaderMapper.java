@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 
 /**
  * Created by jaykelin on 2016/11/1.
+ * @deprecated
  */
 public class ClickhouseLoaderMapper extends Mapper<NullWritable, OrcStruct, Text, Text> {
 

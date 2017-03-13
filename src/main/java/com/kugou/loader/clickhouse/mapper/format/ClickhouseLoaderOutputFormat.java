@@ -13,6 +13,7 @@ import java.sql.Statement;
 
 /**
  * Created by jaykelin on 2016/11/15.
+ * @deprecated
  */
 public class ClickhouseLoaderOutputFormat extends OutputFormat<NullWritable, Text> {
 

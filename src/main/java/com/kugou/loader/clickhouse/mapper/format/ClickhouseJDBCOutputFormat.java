@@ -26,6 +26,7 @@ import java.sql.Statement;
 
 /**
  * Created by jaykelin on 2016/11/2.
+ * @deprecated
  */
 public class ClickhouseJDBCOutputFormat extends TextOutputFormat<NullWritable, Text> {
 
