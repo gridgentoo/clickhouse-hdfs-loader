@@ -36,7 +36,7 @@ public class TextLoaderMapper extends AbstractClickhouseLoaderMapper<Object, Tex
                     continue;
                 }
 
-                if(line.length() > 0){
+                if(line.length() > 0 && line.length() > 0){
                     line.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR);
                 }
                 if(field.equals("\\\\N") || field.equals("/N")){

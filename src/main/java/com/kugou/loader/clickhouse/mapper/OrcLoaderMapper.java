@@ -28,7 +28,7 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
             if (getExcludeFieldIndexs().contains(i)){
                 continue;
             }
-            if(i != 0) {
+            if(i != 0 && row.length() > 0) {
                 row.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR);
             }
             WritableComparable fieldValue = value.getFieldValue(i);
