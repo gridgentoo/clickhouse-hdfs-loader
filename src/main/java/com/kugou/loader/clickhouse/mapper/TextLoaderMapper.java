@@ -28,12 +28,10 @@ public class TextLoaderMapper extends AbstractClickhouseLoaderMapper<Object, Tex
         int start = 0;
         int end   = 0;
         String raw = value.toString();
-        logger.info("raw="+raw);
         for(int i = 0; i < raw.length(); i++){
             if(raw.charAt(i) == separator){
                 // 截取字段内容
                 String field = raw.substring(start, i);
-                logger.info("index="+index+",value=["+field+"]");
                 end = i;
                 start = end+1;
 
@@ -64,7 +62,6 @@ public class TextLoaderMapper extends AbstractClickhouseLoaderMapper<Object, Tex
                 field = field.replace(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR, replaceChar.charAt(0));
                 field = field.replace('\\', '/');
             }
-            logger.info("index="+index+",value=["+field+"]");
 
             if (index == clickhouseDistributedTableShardingKeyIndex){
                 clickhouseDistributedTableShardingKeyValue = field;
