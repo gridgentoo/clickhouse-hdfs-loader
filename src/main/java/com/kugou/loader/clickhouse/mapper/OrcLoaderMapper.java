@@ -20,8 +20,8 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
     @Override
     public String readLine(NullWritable key, OrcStruct value, Context context) {
         ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
-        String nullNonString = "";
-        String nullString = "";
+        String nullNonString = clickhouseJDBCConfiguration.getNullNonString();
+        String nullString = clickhouseJDBCConfiguration.getNullString();
         String replaceChar = clickhouseJDBCConfiguration.getReplaceChar();
         StringBuilder row = new StringBuilder();
         for(int i = 0; i < value.getNumFields(); i++){
@@ -40,7 +40,7 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
                 if (i == clickhouseDistributedTableShardingKeyIndex){
                     clickhouseDistributedTableShardingKeyValue = field;
                 }
-                if(field.equals("\\\\N")){
+                if(field.equals("\\N")){
                     field = nullNonString;
                 }else if(field.equalsIgnoreCase("NULL")) {
                     field = nullString;
