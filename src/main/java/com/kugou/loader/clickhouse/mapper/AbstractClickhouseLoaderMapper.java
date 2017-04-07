@@ -10,6 +10,9 @@ import com.kugou.loader.clickhouse.HostRecordsCache;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
+import com.kugou.loader.clickhouse.mapper.decode.DefaultRowRecordDecoder;
+import com.kugou.loader.clickhouse.mapper.decode.RowRecordDecoder;
+import com.kugou.loader.clickhouse.utils.Tuple;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -19,6 +22,7 @@ import org.apache.hadoop.mapreduce.Mapper;
 
 import java.io.IOException;
 import java.sql.*;
+import java.util.IllegalFormatException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -33,11 +37,10 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     private static final Log log = LogFactory.getLog(AbstractClickhouseLoaderMapper.class);
 
     private static final Pattern HIVE_PARTITIONS_PATTERN = Pattern.compile("([0-9a-zA-Z]+)=([0-9a-zA-Z_\\-]+)/?");
+    private static final String  CLICKHOUSE_COUNTERS_GROUP = "Clickhouse Loader Counters";
 
     protected int               maxTries;
     protected int               batchSize;
-//    protected Connection        connection;
-//    protected Statement         statement;
     protected String            clickhouseDistributedTableShardingKeyValue = null;
     protected int               clickhouseDistributedTableShardingKeyIndex = -1;
     protected String            sqlHeader;                                          // INSERT INTO <tempTable or tempDistributedTable> FORMET <CSV|Tabxxx>
@@ -56,6 +59,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     private HashFunction        hashFn = Hashing.murmur3_128();
     private List<Integer>       excludeFieldIndexs = Lists.newArrayList();
     private ClickhouseConfiguration config;
+    private RowRecordDecoder<KEYIN, VALUEIN> rowRecordDecoder = null;
 
 
     @Override
@@ -68,22 +72,9 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         try {
             this.tempTable = getTempTableName(context);
 
-            // 初始化参数
-            initTempEnv(config);
+            // 初始化环境
+            initTempEnv(context, config);
 
-            // create temp table for all host
-            String createTableDDL = createTempTableDDL(config, tempTable);
-            for (String host : clickhouseClusterHostList){
-                createTempTable(config, host, createTableDDL, 0, null);
-                hostRecords.put(host, new HostRecordsCache());
-            }
-//            createTempTable(config, statement, createTableDDL, 0, null);
-
-            clickhouseDistributedTableShardingKeyIndex = config.getInt(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX, ConfigurationOptions.DEFAULT_SHARDING_KEY_INDEX);
-
-            hivePartitions = extractHivePartitions(config);
-
-            log.info("Clickhouse JDBC : distributed table sharding key["+clickhouseDistributedTableShardingKey+"] index["+clickhouseDistributedTableShardingKeyIndex+"]");
         } catch (ClassNotFoundException e) {
             log.error(e.getMessage(), e);
             throw new IOException(e.getMessage(), e);
@@ -102,7 +93,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             HostRecordsCache cache = hostRecords.get(host);
             if(cache.recordsCount > 0){
                 cache.ready = true;
-                batchInsert(host, config.getClickhouseHttpPort(), cache, 0);
+                batchInsert(context, host, config.getClickhouseHttpPort(), cache, 0);
             }
         }
 
@@ -117,51 +108,92 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 
     @Override
     protected void map(KEYIN key, VALUEIN value, Context context) throws IOException, InterruptedException {
-        String line = readLine(key, value, context);
-        Configuration conf = context.getConfiguration();
-        if (conf.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS)){
-            StringBuffer partitions = new StringBuffer();
-            Iterator<Map.Entry<String, String>> it = hivePartitions.entrySet().iterator();
-            while(it.hasNext()){
-                Map.Entry<String, String> entry = it.next();
-                partitions.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR).append(entry.getValue());
+        try{
+            rowRecordDecoder.setRowRecord(key, value);
+            String line = readRowRecord(rowRecordDecoder, context);
+            Configuration conf = context.getConfiguration();
+            if (conf.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS)){
+                StringBuffer partitions = new StringBuffer();
+                Iterator<Map.Entry<String, String>> it = hivePartitions.entrySet().iterator();
+                while(it.hasNext()){
+                    Map.Entry<String, String> entry = it.next();
+                    partitions.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR).append(entry.getValue());
+                }
+                if (partitions.length() > 0){
+                    line += partitions.toString();
+                }
             }
-            if (partitions.length() > 0){
-                line += partitions.toString();
-            }
+            write(key, line, context);
+        }catch(IllegalFormatException e){
+            log.error(e.getMessage(), e);
+            context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Illegal format records").increment(1);
         }
-        write(key, line, context);
+
     }
 
-    public abstract String readLine(KEYIN key, VALUEIN value, Context context);
+    public abstract RowRecordDecoder<KEYIN, VALUEIN> getRowRecordDecoder(Configuration config);
 
     public abstract void write(String host, String hostIndex, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException;
 
     /**
-     * 目标输出是否使用Distributed Table
+     * 读取每一行
+     * @param rowRecordDecoder
+     * @param context
      * @return
+     * @throws IllegalArgumentException
      */
-    protected boolean targetOutputIsDistributedTable(){
-        return targetIsDistributeTable;
+    public String readRowRecord(RowRecordDecoder rowRecordDecoder, Context context) throws IllegalFormatException{
+        ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
+        String nullNonString = clickhouseJDBCConfiguration.getNullNonString();
+        String nullString = clickhouseJDBCConfiguration.getNullString();
+        String replaceChar = clickhouseJDBCConfiguration.getReplaceChar();
+        StringBuilder row = new StringBuilder();
+        ConfigurationOptions.ClickhouseFormats clickhouseFormat = ConfigurationOptions.ClickhouseFormats.valueOf(clickhouseJDBCConfiguration.getClickhouseFormat());
+
+        int maxColumnIndex = 0;
+        while(rowRecordDecoder.hasNext()){
+            Tuple.Tuple2<Integer, String> tuple2 = rowRecordDecoder.nextTuple();
+
+            if(rowRecordDecoder.isDistributedTableShardingKey()){
+                clickhouseDistributedTableShardingKeyValue = tuple2._2();
+            }
+            if (getExcludeFieldIndexs().contains(tuple2._1())){
+                continue;
+            }
+            if(tuple2._1() != 0 && row.length() > 0) {
+                row.append(clickhouseFormat.SPERATOR);
+            }
+            String field;
+            if (null == tuple2._2()){
+                field = nullString;
+            }
+            else if (StringUtils.equals(tuple2._2(), "\\N")){
+                field = nullNonString;
+            }
+            else {
+                field = tuple2._2().replace(clickhouseFormat.SPERATOR, replaceChar).replace('\\', '/');
+            }
+            row.append(field);
+            maxColumnIndex = tuple2._1();
+        }
+        boolean extractHivePartitions = clickhouseJDBCConfiguration.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS);
+        int totalColumnsExcludeHivePartitions = extractHivePartitions?clickhouseJDBCConfiguration.getTargetTableColumnSize() - hivePartitions.size():clickhouseJDBCConfiguration.getTargetTableColumnSize();
+        int columnSize = maxColumnIndex - excludeFieldIndexs.size();
+        if ( columnSize + 1  < totalColumnsExcludeHivePartitions){
+            for(int i = columnSize+1; i < totalColumnsExcludeHivePartitions; i++){
+                row.append(clickhouseFormat.SPERATOR);
+            }
+        }else if (columnSize >= totalColumnsExcludeHivePartitions){
+            throw new IllegalArgumentException("target table column size = " + clickhouseJDBCConfiguration.getTargetTableColumnSize() + ", but found row column index = " + (columnSize +1));
+        }
+
+        return row.toString();
     }
 
-    /**
-     * Clickhouse Cluster Name
-     *
-     * @return
-     */
-    protected String getDistributedClusterName(){
-        return clickhouseClusterName;
-    }
 
     protected List<String> getClickhouseClusterHostList(){
         return clickhouseClusterHostList;
     }
-
-    protected String getClickhouseDistributedTableShardingKey(){
-        return clickhouseDistributedTableShardingKey;
-    }
-
 
     /**
      * 输出
@@ -190,11 +222,11 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         cache.recordsCount ++;
         if(cache.recordsCount >= batchSize/getClickhouseClusterHostList().size()){
             cache.ready = true;
-            batchInsert(host, configuration.getClickhouseHttpPort(), cache, 0);
+            batchInsert(context, host, configuration.getClickhouseHttpPort(), cache, 0);
         }
     }
 
-    protected void batchInsert(String host, int port, HostRecordsCache cache, int tries){
+    protected void batchInsert(Context context, String host, int port, HostRecordsCache cache, int tries){
         try {
             if(tries <= maxTries){
                 long l = System.currentTimeMillis();
@@ -203,13 +235,15 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                     ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, port, ConfigurationOptions.DEFAULT_TEMP_DATABASE, config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
                     client.insert(cache.records.toString());
                     log.info("Clickhouse JDBC : batch_commit["+tries+"] host["+host+"] end. take time "+(System.currentTimeMillis() - l)+"ms.");
+                    context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Success records").increment(cache.recordsCount);
                     // 清空
                     cache.reset();
                 }
             }else{
                 if(cache.ready){
                     log.error("Clickhouse JDBC : host["+host+"]" + maxTries + " times tries all failed. batchsize=" + cache.recordsCount);
-                    log.warn("Clickhouse JDBC : ERROR Data :\n"+cache.records.toString());
+                    log.warn("Clickhouse JDBC : ERROR Data :\n" + cache.records.toString());
+                    context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Failed records").increment(cache.recordsCount);
                     // TODO 所有尝试都失败了
                     cache.reset();
                 }
@@ -220,7 +254,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 Thread.sleep((tries+1)*10000l);
             } catch (InterruptedException e1) {
             }
-            batchInsert(host, port, cache, tries + 1);
+            batchInsert(context, host, port, cache, tries + 1);
         }
     }
 
@@ -240,49 +274,81 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
      * @param configuration
      * @throws IOException
      */
-    private void initTempEnv(ClickhouseConfiguration configuration) throws IOException{
-        try {
-            clickhouseClusterName = configuration.get(ConfigurationKeys.CL_TARGET_CLUSTER_NAME);
-            distributedLocalDatabase = configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE);
-            distributedLocalTable = configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_TABLE);
-            clickhouseDistributedTableShardingKey = configuration.get(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY);
+    private void initTempEnv(Context context, ClickhouseConfiguration configuration) throws SQLException, ClassNotFoundException, IOException {
+        clickhouseClusterName = configuration.get(ConfigurationKeys.CL_TARGET_CLUSTER_NAME);
+        distributedLocalDatabase = configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE);
+        distributedLocalTable = configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_TABLE);
+        clickhouseDistributedTableShardingKey = configuration.get(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY);
 
-            if(StringUtils.isNotBlank(clickhouseClusterName)){
-                ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.getConnectUrl(), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
-                this.targetIsDistributeTable = true;
-                ResultSet ret = client.executeQuery("select distinct host_address from system.clusters where cluster='"+this.clickhouseClusterName+"'");
-                while(ret.next()){
-                    String host = ret.getString(1);
-                    if(StringUtils.isNotBlank(host)){
-                        log.debug("Clickhouse JDBC : clickhouse cluster["+clickhouseClusterName+"] found host["+host+"]");
-                        clickhouseClusterHostList.add(host);
-                    }
-                }
-                ret.close();
-            }
-            this.tempDistributedTable = tempTable+"_distributed";
+        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(
+                configuration.getConnectUrl(),
+                configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
+                configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD)
+        );
 
-            if (CollectionUtils.isEmpty(clickhouseClusterHostList)){
-                clickhouseClusterHostList.add(configuration.extractHostFromConnectionUrl());
-            }
-
-            String excludeFieldIndexsParameter = configuration.get(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS);
-            if(StringUtils.isNotBlank(excludeFieldIndexsParameter)){
-                Pattern p = Pattern.compile("(\\d+)");
-                Matcher m = p.matcher(excludeFieldIndexsParameter);
-                while(m.find()){
-                    excludeFieldIndexs.add(Integer.valueOf(m.group(1)));
-                }
-            }
-
-            // Not for insert into temp distributed table
-            this.sqlHeader = "INSERT INTO temp."+ this.tempTable +" FORMAT "+configuration.getClickhouseFormat();
-            log.info("Clickhouse JDBC : INSERT USING header["+sqlHeader+"]");
-
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            throw new IOException(e.getMessage(), e.getCause());
+        // 查询字段总数
+        int targetTableColumnSize = 0;
+        ResultSet ret1 = client.executeQuery("select count(*) from system.columns where database = '"+this.config.getDatabase()+"' and table = '"+this.config.getTableName()+"'");
+        if (ret1.next()){
+            targetTableColumnSize = ret1.getInt(1);
         }
+        ret1.close();
+        this.config.getConf().setInt(ConfigurationKeys.CL_TARGET_TABLE_COLUMN_SIZE, targetTableColumnSize);
+
+        if(StringUtils.isNotBlank(clickhouseClusterName)){
+            this.targetIsDistributeTable = true;
+            ResultSet ret = client.executeQuery("select distinct host_address from system.clusters where cluster='"+this.clickhouseClusterName+"'");
+            while(ret.next()){
+                String host = ret.getString(1);
+                if(StringUtils.isNotBlank(host)){
+                    log.debug("Clickhouse JDBC : clickhouse cluster["+clickhouseClusterName+"] found host["+host+"]");
+                    clickhouseClusterHostList.add(host);
+                }
+            }
+            ret.close();
+        }
+        this.tempDistributedTable = tempTable+"_distributed";
+
+        if (CollectionUtils.isEmpty(clickhouseClusterHostList)){
+            clickhouseClusterHostList.add(configuration.extractHostFromConnectionUrl());
+        }
+
+        String excludeFieldIndexsParameter = configuration.get(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS);
+        if(StringUtils.isNotBlank(excludeFieldIndexsParameter)){
+            log.info("Clickhouse Loader : exclude src field column indexs :"+excludeFieldIndexsParameter);
+            Pattern p = Pattern.compile("(\\d+)");
+            Matcher m = p.matcher(excludeFieldIndexsParameter);
+            while(m.find()){
+                excludeFieldIndexs.add(Integer.valueOf(m.group(1)));
+            }
+        }
+
+        // Not for insert into temp distributed table
+        this.sqlHeader = "INSERT INTO temp."+ this.tempTable +" FORMAT "+configuration.getClickhouseFormat();
+        log.info("Clickhouse JDBC : INSERT USING header["+sqlHeader+"]");
+
+        // 初始化rowRecordDocoder
+        this.rowRecordDecoder = getRowRecordDecoder(configuration.getConf());
+
+        // 抽取hive partitions
+        if (config.isExtractHivePartitions()){
+            hivePartitions = extractHivePartitions(config);
+        }
+
+        // 识别 Distributed table Sharding key
+        clickhouseDistributedTableShardingKeyIndex = config.getInt(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX, ConfigurationOptions.DEFAULT_SHARDING_KEY_INDEX);
+        log.info("Clickhouse JDBC : distributed table sharding key["+clickhouseDistributedTableShardingKey+"] index["+clickhouseDistributedTableShardingKeyIndex+"]");
+
+        // create temp table for all host
+        String createTableDDL = createTempTableDDL(config, tempTable);
+        for (String host : clickhouseClusterHostList){
+            context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Created temp tables").increment(1);
+            createTempTable(config, host, createTableDDL, 0, null);
+            hostRecords.put(host, new HostRecordsCache());
+        }
+
+        context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Target table columns").setValue(config.getTargetTableColumnSize());
+        context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Distributed local hosts").setValue(clickhouseClusterHostList.size());
     }
 
     /**
@@ -393,6 +459,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 String key = m.group(1);
                 String value = m.group(2);
                 if (StringUtils.isNotEmpty(key) && StringUtils.isNotEmpty(value)){
+                    log.info("Clickhouse Loader ： Found hive partition ["+key+"="+value+"]");
                     hivePartitions.put(key, value);
                 }
             }

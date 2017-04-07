@@ -1,5 +1,7 @@
 package com.kugou.loader.clickhouse.config;
 
+import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -24,6 +26,10 @@ public class ClickhouseConfiguration extends ConfigurationKeys{
 
     public ClickhouseConfiguration(Configuration configuration){
         this.conf = configuration;
+    }
+
+    public Configuration getConf(){
+        return this.conf;
     }
 
     public Connection getConnection() throws ClassNotFoundException, SQLException {
@@ -127,5 +133,13 @@ public class ClickhouseConfiguration extends ConfigurationKeys{
 
     public boolean getBoolean(String name, boolean defaultValue) {
         return conf.getBoolean(name, defaultValue);
+    }
+
+    public int getTargetTableColumnSize(){
+        return conf.getInt(CL_TARGET_TABLE_COLUMN_SIZE, 0);
+    }
+
+    public boolean isExtractHivePartitions(){
+        return conf.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, false);
     }
 }

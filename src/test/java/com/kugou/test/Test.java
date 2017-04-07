@@ -6,6 +6,7 @@ import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.mapper.AbstractClickhouseLoaderMapper;
 import com.kugou.loader.clickhouse.mapper.OrcLoaderMapper;
+import com.kugou.loader.clickhouse.mapper.decode.RowRecordDecoder;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Mapper;
 
@@ -74,26 +75,31 @@ public class Test {
 
     @org.junit.Test
     public void extractHivePartition(){
-        Configuration conf = new Configuration();
-        conf.set(ConfigurationKeys.CLI_P_EXPORT_DIR, "/user/hive/warehouse/dsl.db/dwf_list_play_d/dt=2016-10-01/pt=ios");
-        final ClickhouseConfiguration configuration = new ClickhouseConfiguration(conf);
-        AbstractClickhouseLoaderMapper mapper = new AbstractClickhouseLoaderMapper() {
-            @Override
-            public String readLine(Object key, Object value, Context context) {
-                Map<String, String> hivePartitions = this.extractHivePartitions(configuration);
-                for (String k : hivePartitions.keySet()){
-                    System.out.println(k+ "===>" + hivePartitions.get(k));
-                }
-                return null;
-            }
-
-            @Override
-            public void write(String host, String hostIndex, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
-
-            }
-        };
-
-        mapper.readLine(null , null, null);
+//        Configuration conf = new Configuration();
+//        conf.set(ConfigurationKeys.CLI_P_EXPORT_DIR, "/user/hive/warehouse/dsl.db/dwf_list_play_d/dt=2016-10-01/pt=ios");
+//        final ClickhouseConfiguration configuration = new ClickhouseConfiguration(conf);
+//        AbstractClickhouseLoaderMapper mapper = new AbstractClickhouseLoaderMapper() {
+//            @Override
+//            public RowRecordDecoder getRowRecordDecoder(Context context) {
+//                return null;
+//            }
+//
+//            @Override
+//            public String readLine(Object key, Object value, Context context) {
+//                Map<String, String> hivePartitions = this.extractHivePartitions(configuration);
+//                for (String k : hivePartitions.keySet()){
+//                    System.out.println(k+ "===>" + hivePartitions.get(k));
+//                }
+//                return null;
+//            }
+//
+//            @Override
+//            public void write(String host, String hostIndex, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
+//
+//            }
+//        };
+//
+//        mapper.readLine(null , null, null);
     }
 
     @org.junit.Test

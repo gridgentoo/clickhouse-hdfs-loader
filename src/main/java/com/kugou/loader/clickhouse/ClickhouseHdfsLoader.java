@@ -18,6 +18,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -26,6 +27,7 @@ import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
+import org.kohsuke.args4j.CmdLineException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -65,7 +67,17 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         String[] otherArgs = new GenericOptionsParser(conf, strings).getRemainingArgs();
 
         MainCliParameterParser cliParameterParser = new MainCliParameterParser();
-        cliParameterParser.cmdLineParser.parseArgument(otherArgs);
+        try{
+            cliParameterParser.cmdLineParser.parseArgument(otherArgs);
+        }catch (CmdLineException e){
+            cliParameterParser.cmdLineParser.printUsage(System.out);
+            return 0;
+        }
+
+        if (cliParameterParser.help){
+            cliParameterParser.cmdLineParser.printUsage(System.out);
+            return 0;
+        }
 
         conf.set(ConfigurationKeys.CLI_P_CLICKHOUSE_FORMAT, cliParameterParser.clickhouseFormat);
         conf.set(ConfigurationKeys.CLI_P_CONNECT, cliParameterParser.connect);
@@ -124,9 +136,19 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         job.setJarByClass(ClickhouseHdfsLoader.class);
         job.setJobName("Clickhouse HDFS Loader");
 
-        job.setMapperClass(conf.getClassByName(cliParameterParser.mapperClass).asSubclass(Mapper.class));
+        String mapperClass, inputFormatClass;
+        if (StringUtils.isNotBlank(cliParameterParser.i)){
+            ConfigurationOptions.InputFormats inputFormat = ConfigurationOptions.InputFormats.valueOf(cliParameterParser.i);
+            mapperClass = inputFormat.MAPPER_CLAZZ;
+            inputFormatClass = inputFormat.INPUT_FORMAT_CLAZZ;
+        }else{
+            mapperClass = cliParameterParser.mapperClass;
+            inputFormatClass = cliParameterParser.inputFormat;
+        }
+
+        job.setMapperClass(conf.getClassByName(mapperClass).asSubclass(Mapper.class));
         // 参数配置InputFormat
-        job.setInputFormatClass(conf.getClassByName(cliParameterParser.inputFormat).asSubclass(InputFormat.class));
+        job.setInputFormatClass(conf.getClassByName(inputFormatClass).asSubclass(InputFormat.class));
 
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(Text.class);
@@ -159,6 +181,12 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         FileInputFormat.addInputPath(job, new Path(conf.get(ConfigurationKeys.CLI_P_EXPORT_DIR)));
 
         int ret = job.waitForCompletion(true) ? 0 : 1;
+
+        Counter counter = job.getCounters().findCounter("Clickhouse Loader Counters","Failed records");
+        if(null != counter && counter.getValue() > 0){
+            log.error("Clickhouse Loader: ERROR! Failed records = "+counter.getValue());
+            ret = 1;
+        }
 
         return ret;
     }
