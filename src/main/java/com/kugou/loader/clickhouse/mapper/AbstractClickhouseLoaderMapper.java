@@ -113,11 +113,12 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             String line = readRowRecord(rowRecordDecoder, context);
             Configuration conf = context.getConfiguration();
             if (conf.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS)){
+                ConfigurationOptions.ClickhouseFormats clickhouseFormat = ConfigurationOptions.ClickhouseFormats.valueOf((new ClickhouseConfiguration(conf)).getClickhouseFormat());
                 StringBuffer partitions = new StringBuffer();
                 Iterator<Map.Entry<String, String>> it = hivePartitions.entrySet().iterator();
                 while(it.hasNext()){
                     Map.Entry<String, String> entry = it.next();
-                    partitions.append(ConfigurationOptions.DEFAULT_RESULT_FIELD_SPERATOR).append(entry.getValue());
+                    partitions.append(clickhouseFormat.SPERATOR).append(entry.getValue());
                 }
                 if (partitions.length() > 0){
                     line += partitions.toString();
