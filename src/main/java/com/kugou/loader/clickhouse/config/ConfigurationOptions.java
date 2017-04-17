@@ -20,7 +20,7 @@ public class ConfigurationOptions {
     public static final char    DEFAULT_RESULT_FIELD_SPERATOR = ',';
     public static final String  DEFAULT_RESULT_NULL_STRING = "";
     public static final String  DEFAULT_RESULT_NULL_NON_STRING = "";
-    public static final boolean DEFAULT_EXTRACT_HIVE_PARTITIONS = true;
+    public static final boolean DEFAULT_EXTRACT_HIVE_PARTITIONS = false;
     public static final int     DEFAULT_MAX_TRIES = 3;
 
     public static final String  RULE_OF_APPEND_DAILY_TABLE = "append";

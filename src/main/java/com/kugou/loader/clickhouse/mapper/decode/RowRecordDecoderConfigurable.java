@@ -14,6 +14,7 @@ public abstract class RowRecordDecoderConfigurable<K, V> implements RowRecordDec
     protected ClickhouseConfiguration config = null;
     private   int                     distributedTableShardingKeyIndex = -1;
     private   int                     cursor = 0;
+    private   int                     next_cursor = 0;
     private   RecordDecoderConfigurable recordDecoder = null;
 
     public RowRecordDecoderConfigurable(Configuration configuration, RecordDecoderConfigurable recordDecoder){
@@ -26,17 +27,23 @@ public abstract class RowRecordDecoderConfigurable<K, V> implements RowRecordDec
     @Override
     public void setRowRecord(K key, V value) {
         this.cursor = 0;
+        this.next_cursor = 0;
         this.recordDecoder.setRecord(key, value);
     }
 
     @Override
     public boolean hasNext() {
+        this.cursor = this.next_cursor;
         return null != recordDecoder && recordDecoder.hasNext();
     }
 
     @Override
     public Tuple.Tuple2<Integer, String> nextTuple() {
-        return Tuple.tuple(cursor++, recordDecoder.next());
+        if (this.cursor != this.next_cursor){
+            this.cursor = this.next_cursor;
+        }
+        this.next_cursor += 1;
+        return Tuple.tuple(cursor, recordDecoder.next());
     }
 
     public void setConfiguration(ClickhouseConfiguration configuration){

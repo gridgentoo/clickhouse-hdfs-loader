@@ -154,6 +154,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         int maxColumnIndex = 0;
         while(rowRecordDecoder.hasNext()){
             Tuple.Tuple2<Integer, String> tuple2 = rowRecordDecoder.nextTuple();
+            maxColumnIndex = tuple2._1();
 
             if(rowRecordDecoder.isDistributedTableShardingKey()){
                 clickhouseDistributedTableShardingKeyValue = tuple2._2();
@@ -175,11 +176,12 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 field = tuple2._2().replace(clickhouseFormat.SPERATOR, replaceChar).replace('\\', '/');
             }
             row.append(field);
-            maxColumnIndex = tuple2._1();
         }
+
         boolean extractHivePartitions = clickhouseJDBCConfiguration.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS);
         int totalColumnsExcludeHivePartitions = extractHivePartitions?clickhouseJDBCConfiguration.getTargetTableColumnSize() - hivePartitions.size():clickhouseJDBCConfiguration.getTargetTableColumnSize();
         int columnSize = maxColumnIndex - excludeFieldIndexs.size();
+//        log.info("extract colsize = "+(columnSize + 1)+",target colsize = "+totalColumnsExcludeHivePartitions+"max colsize = "+maxColumnIndex);
         if ( columnSize + 1  < totalColumnsExcludeHivePartitions){
             for(int i = columnSize+1; i < totalColumnsExcludeHivePartitions; i++){
                 row.append(clickhouseFormat.SPERATOR);
@@ -289,11 +291,12 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 
         // 查询字段总数
         int targetTableColumnSize = 0;
-        ResultSet ret1 = client.executeQuery("select count(*) from system.columns where database = '"+this.config.getDatabase()+"' and table = '"+this.config.getTableName()+"'");
-        if (ret1.next()){
-            targetTableColumnSize = ret1.getInt(1);
+        ResultSet ret1 = client.executeQuery("select count(*) as total_col_size from system.columns where database = '"+this.config.getDatabase()+"' and table = '"+this.config.getTableName()+"'");
+        while (ret1.next()){
+            targetTableColumnSize = ret1.getInt("total_col_size");
         }
         ret1.close();
+        log.info("Clickhouse Loader : Found target table["+this.config.getDatabase()+"."+this.config.getTableName()+"] column size = "+targetTableColumnSize);
         this.config.getConf().setInt(ConfigurationKeys.CL_TARGET_TABLE_COLUMN_SIZE, targetTableColumnSize);
 
         if(StringUtils.isNotBlank(clickhouseClusterName)){
@@ -302,7 +305,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             while(ret.next()){
                 String host = ret.getString(1);
                 if(StringUtils.isNotBlank(host)){
-                    log.debug("Clickhouse JDBC : clickhouse cluster["+clickhouseClusterName+"] found host["+host+"]");
+                    log.debug("Clickhouse Loader : clickhouse cluster["+clickhouseClusterName+"] found host["+host+"]");
                     clickhouseClusterHostList.add(host);
                 }
             }
