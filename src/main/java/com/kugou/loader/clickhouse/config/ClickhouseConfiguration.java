@@ -96,11 +96,11 @@ public class ClickhouseConfiguration extends ConfigurationKeys{
     }
 
     public String getNullNonString(){
-        return conf.get(CLI_P_NULL_NON_STRING);
+        return conf.get(CLI_P_NULL_NON_STRING, "");
     }
 
     public String getNullString(){
-        return conf.get(CLI_P_NULL_STRING);
+        return conf.get(CLI_P_NULL_STRING, "");
     }
 
     public String getFieldsTerminatedBy(){

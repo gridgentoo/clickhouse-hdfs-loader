@@ -176,6 +176,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 field = tuple2._2().replace(clickhouseFormat.SPERATOR, replaceChar).replace('\\', '/');
             }
             row.append(field);
+//            log.info("index="+tuple2._1()+":"+tuple2._2()+":"+field);
         }
 
         boolean extractHivePartitions = clickhouseJDBCConfiguration.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS);
@@ -189,7 +190,6 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 columnSize --;
             }
         }
-//        int columnSize = maxColumnIndex - excludeFieldIndexs.size();
 //        log.info("extract colsize = "+(columnSize + 1)+",target colsize = "+totalColumnsExcludeHivePartitions+"max colsize = "+maxColumnIndex);
         if ( columnSize + 1  < totalColumnsExcludeHivePartitions){
             for(int i = columnSize+1; i < totalColumnsExcludeHivePartitions; i++){
