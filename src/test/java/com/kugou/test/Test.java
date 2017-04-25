@@ -100,6 +100,9 @@ public class Test {
 //        };
 //
 //        mapper.readLine(null , null, null);
+
+        Pattern CLICKHOUSE_CONNECT_PATTERN = Pattern.compile("^jdbc:clickhouse://([\\d\\.\\-_\\w]+):(\\d+)/([\\d\\w\\-_]+)(\\?.+)?$");
+        System.out.println(CLICKHOUSE_CONNECT_PATTERN.matcher("jdbc:clickhouse://10.1.0.210:8123/dal_crosspt_dist?xx=1&xx=2").matches());
     }
 
     @org.junit.Test

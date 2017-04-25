@@ -18,7 +18,7 @@ public class ClickhouseClientHolder {
     private static final Log log = LogFactory.getLog(ClickhouseClientHolder.class);
 
     private static Map<String, ClickhouseClient> clientHolders = Maps.newHashMap();
-    private static Pattern CLICKHOUSE_CONNECT_PATTERN = Pattern.compile("jdbc:clickhouse://([\\d\\.\\-_\\w]+):(\\d+)/([\\w\\-_]+)");
+    private static Pattern CLICKHOUSE_CONNECT_PATTERN = Pattern.compile("^jdbc:clickhouse://([\\d\\.\\-_\\w]+):(\\d+)/([\\d\\w\\-_]+)(\\?.+)?$");
 
     public static synchronized ClickhouseClient getClickhouseClient(String host, int port, String database) throws SQLException {
         String key = "jdbc:clickhouse://"+host+":"+port+"/"+database;
@@ -47,7 +47,7 @@ public class ClickhouseClientHolder {
     }
 
     public static synchronized ClickhouseClient getClickhouseClient(String connectionUrl, String username, String password) throws SQLException {
-        log.info("Clickhouse Loader : getClickhouseClient["+connectionUrl+"]");
+        log.info("Clickhouse Loader : get clickhouse client["+connectionUrl+"] for user="+username);
         if(StringUtils.isBlank(username) || StringUtils.isBlank(password)){
             return getClickhouseClient(connectionUrl);
         }

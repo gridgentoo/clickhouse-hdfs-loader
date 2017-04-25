@@ -19,7 +19,7 @@ public class ClickhouseConfiguration extends ConfigurationKeys{
 
     private final static Log log = LogFactory.getLog(ClickhouseConfiguration.class);
 
-    private final static Pattern urlRegexp = Pattern.compile("^jdbc:clickhouse://([a-zA-Z0-9.-]+|\\[[:.a-fA-F0-9]+\\]):([0-9]+)(?:|/|/([a-zA-Z0-9_]+))$");
+    private final static Pattern urlRegexp = Pattern.compile("^jdbc:clickhouse://([\\d\\.\\-_\\w]+):(\\d+)/([\\d\\w\\-_]+)(\\?.+)?$");
     private final static String DEFAULT_DATABASE = "default";
 
     private Configuration conf;

@@ -44,7 +44,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
 
     private static final    Log log = LogFactory.getLog(ClickhouseHdfsLoader.class);
     private static final    Pattern CLICKHOUSE_DISTRIBUTED_ENGINE_CAUSE = Pattern.compile("= *Distributed *\\( *([A-Za-z0-9_\\-]+) *, *'?([A-Za-z0-9_\\-]+)'? *, *'?([A-Za-z0-9_\\-]+)'? *(, *[a-zA-Z0-9_\\-]+\\(([A-Za-z0-9_\\-]+|)\\))? *\\)$");
-    private static final    Pattern urlRegexp = Pattern.compile("^jdbc:clickhouse://([a-zA-Z0-9.-]+|\\[[:.a-fA-F0-9]+\\]):([0-9]+)(?:|/|/([a-zA-Z0-9_]+))$");
+    private static final    Pattern urlRegexp = Pattern.compile("^jdbc:clickhouse://([\\d\\.\\-_\\w]+):(\\d+)/([\\d\\w\\-_]+)(\\?.+)?$");
 
     private String          clickhouseClusterName = null;
     private boolean         targetTableIsDistributed = false;
@@ -200,7 +200,9 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
      * @throws ClassNotFoundException
      */
     private void initClickhouseParameters(Configuration configuration, MainCliParameterParser parser) throws SQLException, ClassNotFoundException {
-        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(parser.connect, configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
+        ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(parser.connect,
+                configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
+                configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
         targetTableDatabase = extractTargetTableDatabase(parser.connect, parser.table);
         configuration.set(ConfigurationKeys.CL_TARGET_TABLE_DATABASE, targetTableDatabase);
         targetTableFullName = parser.table;
