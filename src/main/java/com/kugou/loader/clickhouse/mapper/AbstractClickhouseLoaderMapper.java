@@ -180,7 +180,16 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 
         boolean extractHivePartitions = clickhouseJDBCConfiguration.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS);
         int totalColumnsExcludeHivePartitions = extractHivePartitions?clickhouseJDBCConfiguration.getTargetTableColumnSize() - hivePartitions.size():clickhouseJDBCConfiguration.getTargetTableColumnSize();
-        int columnSize = maxColumnIndex - excludeFieldIndexs.size();
+        int columnSize = maxColumnIndex;
+        for (int index :excludeFieldIndexs){
+            if (index > maxColumnIndex){
+//                log.warn("Clickhouse Loader : Found exclude index["+index+"] max than data_max_column_index["+maxColumnIndex+"]");
+                continue;
+            }else{
+                columnSize --;
+            }
+        }
+//        int columnSize = maxColumnIndex - excludeFieldIndexs.size();
 //        log.info("extract colsize = "+(columnSize + 1)+",target colsize = "+totalColumnsExcludeHivePartitions+"max colsize = "+maxColumnIndex);
         if ( columnSize + 1  < totalColumnsExcludeHivePartitions){
             for(int i = columnSize+1; i < totalColumnsExcludeHivePartitions; i++){
