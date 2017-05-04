@@ -132,6 +132,16 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
 //            mergeAndDropOldDailyTable(conf, cliParameterParser.dailyExpires, cliParameterParser.dailyExpiresProcess, StringUtils.isNotBlank(targetLocalTable)?targetLocalTable:targetTable);
         }
 
+        int numReduceTask =  1;
+        if(cliParameterParser.numReduceTasks != -1){
+            numReduceTask = cliParameterParser.numReduceTasks;
+        }else if(targetTableIsDistributed && CollectionUtils.isNotEmpty(clickhouseClusterHosts)){
+            numReduceTask = clickhouseClusterHosts.size() * cliParameterParser.loaderTaskExecute;
+        }else if(cliParameterParser.loaderTaskExecute >= 1){
+            numReduceTask = cliParameterParser.loaderTaskExecute;
+        }
+        conf.setInt(ConfigurationKeys.CL_NUM_REDUCE_TASK, numReduceTask);
+
         Job job = Job.getInstance(conf);
         job.setJarByClass(ClickhouseHdfsLoader.class);
         job.setJobName("Clickhouse HDFS Loader");
@@ -156,15 +166,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         job.setReducerClass(ClickhouseLoaderReducer.class);
         job.setOutputFormatClass(NullOutputFormat.class);
 
-        if(cliParameterParser.numReduceTasks != -1){
-            job.setNumReduceTasks(cliParameterParser.numReduceTasks);
-        }else if(targetTableIsDistributed){
-            if (CollectionUtils.isNotEmpty(clickhouseClusterHosts))
-                job.setNumReduceTasks(clickhouseClusterHosts.size() * cliParameterParser.loaderTaskExecute);
-        }else{
-            job.setNumReduceTasks(cliParameterParser.loaderTaskExecute);
-        }
-
+        job.setNumReduceTasks(numReduceTask);
         job.setPartitionerClass(HostSequencePartitioner.class);
 
         //设置Map关闭推测执行task

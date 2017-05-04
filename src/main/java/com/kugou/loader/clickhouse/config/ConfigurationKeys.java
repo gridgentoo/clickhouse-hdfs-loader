@@ -35,4 +35,5 @@ public class ConfigurationKeys {
     public final static String CL_TARGET_LOCAL_TABLE    = "cl_target_local_table";
     public final static String CL_TARGET_LOCAL_DAILY_TABLE_FULLNAME = "cl_target_local_daily_table_fullname";
     public final static String CL_TARGET_TABLE_COLUMN_SIZE = "cl_target_table_column_size";
+    public final static String CL_NUM_REDUCE_TASK = "cl_num_reduce_task";
 }

@@ -97,8 +97,8 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             }
         }
 
-        int loaderTaskExecutor = config.getInt(ConfigurationKeys.CLI_P_LOADER_TASK_EXECUTOR, ConfigurationOptions.DEFAULT_LOADER_TASK_EXECUTOR);
-        int partition = (hashFn.hashString(tempTable).asInt() & Integer.MAX_VALUE) % loaderTaskExecutor;
+        int numReduceTask = config.getInt(ConfigurationKeys.CL_NUM_REDUCE_TASK, ConfigurationOptions.DEFAULT_LOADER_TASK_EXECUTOR);
+        int partition = (hashFn.hashString(tempTable).asInt() & Integer.MAX_VALUE) % numReduceTask;
         for(int i = 0; i < clickhouseClusterHostList.size(); i++){
             write(clickhouseClusterHostList.get(i), i+"."+partition, tempTable, ConfigurationOptions.DEFAULT_TEMP_DATABASE, context);
         }
