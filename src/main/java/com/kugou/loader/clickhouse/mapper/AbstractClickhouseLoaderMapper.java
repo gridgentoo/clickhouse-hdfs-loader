@@ -199,6 +199,10 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             throw new IllegalArgumentException("target table column size = " + clickhouseJDBCConfiguration.getTargetTableColumnSize() + ", but found row column index = " + (columnSize +1));
         }
 
+        if(StringUtils.isNotBlank(config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS))){
+            row.append(config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS));
+        }
+
         return row.toString();
     }
 

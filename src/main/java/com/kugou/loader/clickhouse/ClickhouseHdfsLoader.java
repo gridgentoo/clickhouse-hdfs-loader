@@ -90,6 +90,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         conf.set(ConfigurationKeys.CLI_P_DT,cliParameterParser.dt);
         conf.set(ConfigurationKeys.CLI_P_BATCH_SIZE,String.valueOf(cliParameterParser.batchSize));
         conf.set(ConfigurationKeys.CLI_P_TABLE,cliParameterParser.table);
+        conf.set(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS, cliParameterParser.additionalCols);
         conf.setInt(ConfigurationKeys.CLI_P_MAXTRIES, cliParameterParser.maxTries);
         conf.setInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, cliParameterParser.clickhouseHttpPort);
         conf.setInt(ConfigurationKeys.CLI_P_LOADER_TASK_EXECUTOR, cliParameterParser.loaderTaskExecute);
