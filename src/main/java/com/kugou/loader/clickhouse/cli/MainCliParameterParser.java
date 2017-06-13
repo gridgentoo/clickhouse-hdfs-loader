@@ -89,8 +89,8 @@ public class MainCliParameterParser {
     @Option(name="--password", required = false, usage = "")
     public String password = null;
 
-    @Option(name="--additional-cols", required = false, usage = "导入时，数据每行追加内容。")
-    public String additionalCols = null;
+    @Option(name="--additional-cols", required = false, usage = "导入时，数据每行追加内容；多个值以逗号划分")
+    public String additionalCols = "";
 
     @Option(name="--help",required = false)
     public boolean help = false;

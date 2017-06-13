@@ -110,21 +110,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     protected void map(KEYIN key, VALUEIN value, Context context) throws IOException, InterruptedException {
         try{
             rowRecordDecoder.setRowRecord(key, value);
-            String line = readRowRecord(rowRecordDecoder, context);
-            Configuration conf = context.getConfiguration();
-            if (conf.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS)){
-                ConfigurationOptions.ClickhouseFormats clickhouseFormat = ConfigurationOptions.ClickhouseFormats.valueOf((new ClickhouseConfiguration(conf)).getClickhouseFormat());
-                StringBuffer partitions = new StringBuffer();
-                Iterator<Map.Entry<String, String>> it = hivePartitions.entrySet().iterator();
-                while(it.hasNext()){
-                    Map.Entry<String, String> entry = it.next();
-                    partitions.append(clickhouseFormat.SPERATOR).append(entry.getValue());
-                }
-                if (partitions.length() > 0){
-                    line += partitions.toString();
-                }
-            }
-            write(key, line, context);
+            write(key, readRowRecord(rowRecordDecoder, context), context);
         }catch(IllegalFormatException e){
             log.error(e.getMessage(), e);
             context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Illegal format records").increment(1);
@@ -176,31 +162,43 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 field = tuple2._2().replace(clickhouseFormat.SPERATOR, replaceChar).replace('\\', '/');
             }
             row.append(field);
-//            log.info("index="+tuple2._1()+":"+tuple2._2()+":"+field);
+//            System.out.println("index="+tuple2._1()+":"+tuple2._2()+":"+field);
         }
 
-        boolean extractHivePartitions = clickhouseJDBCConfiguration.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS);
-        int totalColumnsExcludeHivePartitions = extractHivePartitions?clickhouseJDBCConfiguration.getTargetTableColumnSize() - hivePartitions.size():clickhouseJDBCConfiguration.getTargetTableColumnSize();
-        int columnSize = maxColumnIndex;
+        int dataColumnSize = maxColumnIndex + 1;
         for (int index :excludeFieldIndexs){
             if (index > maxColumnIndex){
-//                log.warn("Clickhouse Loader : Found exclude index["+index+"] max than data_max_column_index["+maxColumnIndex+"]");
+//                System.out.println("Clickhouse Loader : Found exclude index["+index+"] max than data_max_column_index["+maxColumnIndex+"]");
                 continue;
             }else{
-                columnSize --;
+                dataColumnSize --;
             }
         }
-//        log.info("extract colsize = "+(columnSize + 1)+",target colsize = "+totalColumnsExcludeHivePartitions+"max colsize = "+maxColumnIndex);
-        if ( columnSize + 1  < totalColumnsExcludeHivePartitions){
-            for(int i = columnSize+1; i < totalColumnsExcludeHivePartitions; i++){
-                row.append(clickhouseFormat.SPERATOR);
+        int targetTableColumnSize = clickhouseJDBCConfiguration.getTargetTableColumnSize();
+
+        boolean extractHivePartitions = clickhouseJDBCConfiguration.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS);
+        boolean hasAdditionalColumns = StringUtils.isNotBlank(config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS));
+
+        int finalDataColumnSize = dataColumnSize;
+        if (extractHivePartitions){
+            finalDataColumnSize += hivePartitions.size();
+            Iterator<Map.Entry<String, String>> it = hivePartitions.entrySet().iterator();
+            while (it.hasNext()){
+                Map.Entry<String, String> entry = it.next();
+                row.append(clickhouseFormat.SPERATOR).append(entry.getValue());
             }
-        }else if (columnSize >= totalColumnsExcludeHivePartitions){
-            throw new IllegalArgumentException("target table column size = " + clickhouseJDBCConfiguration.getTargetTableColumnSize() + ", but found row column index = " + (columnSize +1));
+        }
+        if (hasAdditionalColumns){
+            String[] addCols = config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS).split(",");
+            finalDataColumnSize += addCols.length;
+            for (String addCol : addCols){
+                row.append(clickhouseFormat.SPERATOR).append(addCol);
+            }
         }
 
-        if(StringUtils.isNotBlank(config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS))){
-            row.append(config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS));
+        if (finalDataColumnSize != targetTableColumnSize){
+            throw new IllegalArgumentException("Target table column size = " + targetTableColumnSize + ", but found record column size = "
+                    + finalDataColumnSize +"(data_columnSize["+dataColumnSize+"],extract_hivePartitions["+hivePartitions.size()+"],additional_columnSize["+(finalDataColumnSize-dataColumnSize-hivePartitions.size())+"])");
         }
 
         return row.toString();

@@ -2,6 +2,8 @@ package com.kugou.loader.clickhouse.mapper.record.decoder;
 
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import com.kugou.loader.clickhouse.mapper.decode.RecordDecoderConfigurable;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.orc.mapred.OrcStruct;
 
@@ -10,9 +12,11 @@ import org.apache.orc.mapred.OrcStruct;
  */
 public class OrcRecordDecoder extends RecordDecoderConfigurable<NullWritable,OrcStruct> {
 
+    private static final Log log = LogFactory.getLog(OrcRecordDecoder.class);
+
     NullWritable key = null;
     OrcStruct    value = null;
-    int          currentIndex = 0;
+    Integer      currentIndex = 0;
     int          totalFields = -1;
 
     public OrcRecordDecoder(ClickhouseConfiguration configuration) {
@@ -34,6 +38,9 @@ public class OrcRecordDecoder extends RecordDecoderConfigurable<NullWritable,Orc
 
     @Override
     public String next() {
-        return value.getFieldValue(currentIndex++).toString();
+        synchronized (currentIndex){
+            Object val = value.getFieldValue(currentIndex++);
+            return val == null?null:val.toString();
+        }
     }
 }
