@@ -142,4 +142,12 @@ public class ClickhouseConfiguration extends ConfigurationKeys{
     public boolean isExtractHivePartitions(){
         return conf.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, false);
     }
+
+    public String getUsername(){
+        return conf.get(CLI_P_CLICKHOUSE_USERNAME);
+    }
+
+    public String getPassword(){
+        return conf.get(CLI_P_CLICKHOUSE_PASSWORD);
+    }
 }

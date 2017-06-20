@@ -1,6 +1,7 @@
 package com.kugou.loader.clickhouse;
 
 import com.google.common.collect.Maps;
+import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import ru.yandex.clickhouse.util.apache.StringUtils;
@@ -19,6 +20,10 @@ public class ClickhouseClientHolder {
 
     private static Map<String, ClickhouseClient> clientHolders = Maps.newHashMap();
     private static Pattern CLICKHOUSE_CONNECT_PATTERN = Pattern.compile("^jdbc:clickhouse://([\\d\\.\\-_\\w]+):(\\d+)/([\\d\\w\\-_]+)(\\?.+)?$");
+
+    public static synchronized ClickhouseClient getClickhouseClient(ClickhouseConfiguration config) throws SQLException{
+        return getClickhouseClient(config.getConnectUrl(), config.getUsername(), config.getPassword());
+    }
 
     public static synchronized ClickhouseClient getClickhouseClient(String host, int port, String database) throws SQLException {
         String key = "jdbc:clickhouse://"+host+":"+port+"/"+database;

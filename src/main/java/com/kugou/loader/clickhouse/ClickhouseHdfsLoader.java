@@ -6,6 +6,7 @@ import com.kugou.loader.clickhouse.cli.MainCliParameterParser;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
+import com.kugou.loader.clickhouse.mapper.CleanupTempTableOutputFormat;
 import com.kugou.loader.clickhouse.mapper.partitioner.HostSequencePartitioner;
 import com.kugou.loader.clickhouse.reducer.ClickhouseLoaderReducer;
 import com.kugou.loader.clickhouse.task.OldDailyMergeTask;
@@ -55,7 +56,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
     private String          targetDistributedTableShardingKey = null;
     private int             targetDistributedTableShardingKeyIndex = ConfigurationOptions.DEFAULT_SHARDING_KEY_INDEX;
     private String          targetLocalDailyTableFullName = null;
-    private List<String>    clickhouseClusterHosts = null;
+    private List<String>    clickhouseClusterHosts = Lists.newArrayList();
 
     public static void main(String[] args) throws Exception{
         int res = ToolRunner.run(new Configuration(), new ClickhouseHdfsLoader(), args);
@@ -165,7 +166,8 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         job.setMapOutputValueClass(Text.class);
 
         job.setReducerClass(ClickhouseLoaderReducer.class);
-        job.setOutputFormatClass(NullOutputFormat.class);
+//        job.setOutputFormatClass(NullOutputFormat.class);
+        job.setOutputFormatClass(CleanupTempTableOutputFormat.class);
 
         job.setNumReduceTasks(numReduceTask);
         job.setPartitionerClass(HostSequencePartitioner.class);
@@ -190,6 +192,8 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             log.error("Clickhouse Loader: ERROR! Failed records = "+counter.getValue());
             ret = 1;
         }
+
+        cleanTemptable(tempTablePrefix, clickhouseClusterHosts, new ClickhouseConfiguration(conf));
 
         return ret;
     }
@@ -236,6 +240,8 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             targetDistributedTableShardingKeyIndex = getClickhouseDistributedShardingKeyIndex(configuration);
             configuration.setInt(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX, targetDistributedTableShardingKeyIndex);
             log.info("Clickhouse Loader : target table["+targetTableFullName+"] is Distributed on ["+clickhouseClusterName+"] by sharding["+targetDistributedTableShardingKey+",index="+targetDistributedTableShardingKeyIndex+"], look at ["+targetLocalDatabase+"."+targetLocalTable+"]");
+        }else{
+            clickhouseClusterHosts.add(new ClickhouseConfiguration(configuration).extractHostFromConnectionUrl());
         }
 
         configuration.setBoolean(ConfigurationKeys.CL_TARGET_TABLE_IS_DISTRIBUTED, targetTableIsDistributed);
@@ -427,6 +433,26 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
                 }
                 client.dropTableIfExists(oldDailyTableFullname);
             }
+        }
+    }
+
+    public void cleanTemptable(String tempTablePrefix, List<String> clusterHostList, ClickhouseConfiguration conf){
+        String sql = "select concat(database,'.', name) as tablename from system.tables where database='temp' and name like '"+tempTablePrefix+"%'";
+        for (String host : clusterHostList){
+            try{
+                ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, conf.getClickhouseHttpPort(),
+                        conf.getDatabase(), conf.getUsername(), conf.getPassword());
+                ResultSet ret = client.executeQuery(sql);
+                while (ret.next()){
+                    String tempTableName = ret.getString(1);
+                    log.info(String.format("Drop temptable[%s] on host[%s].", tempTableName, host));
+                    client.dropTableIfExists(tempTableName);
+                }
+                ret.close();
+            }catch (SQLException e){
+                log.warn("CleanTemptable failed. ", e);
+            }
+
         }
     }
 

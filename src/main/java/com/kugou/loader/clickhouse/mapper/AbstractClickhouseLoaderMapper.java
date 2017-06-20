@@ -10,7 +10,6 @@ import com.kugou.loader.clickhouse.HostRecordsCache;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
-import com.kugou.loader.clickhouse.mapper.decode.DefaultRowRecordDecoder;
 import com.kugou.loader.clickhouse.mapper.decode.RowRecordDecoder;
 import com.kugou.loader.clickhouse.utils.Tuple;
 import org.apache.commons.collections.CollectionUtils;
