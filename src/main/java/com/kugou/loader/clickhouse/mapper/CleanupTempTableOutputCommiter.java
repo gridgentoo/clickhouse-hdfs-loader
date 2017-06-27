@@ -73,16 +73,18 @@ public class CleanupTempTableOutputCommiter extends OutputCommitter{
         logger.info("Abort task for id="+taskAttemptContext.getTaskAttemptID().getTaskID().toString());
         ClickhouseConfiguration config = new ClickhouseConfiguration(taskAttemptContext.getConfiguration());
         String taskId = taskAttemptContext.getTaskAttemptID().getTaskID().toString();
-        String tempTable = config.getTempTablePrefix()+taskId.substring(taskId.indexOf("m_"))+"_"+taskAttemptContext.getTaskAttemptID().getId();
-        try{
-            for(String host : clusterHostlist){
-                ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, config.getClickhouseHttpPort(),
-                        config.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE), config.getUsername(), config.getPassword());
-                logger.info(String.format("Drop temptable[%s] on host[%s] for abortTask.", tempTable, host));
-                client.dropTableIfExists(tempTable);
+        if (-1 < taskId.indexOf("m_")){
+            String tempTable = config.getTempTablePrefix()+taskId.substring(taskId.indexOf("m_"))+"_"+taskAttemptContext.getTaskAttemptID().getId();
+            try{
+                for(String host : clusterHostlist){
+                    ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, config.getClickhouseHttpPort(),
+                            config.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE), config.getUsername(), config.getPassword());
+                    logger.info(String.format("Drop temptable[%s] on host[%s] for abortTask.", tempTable, host));
+                    client.dropTableIfExists(tempTable);
+                }
+            } catch (SQLException e){
+                logger.warn(String.format("Clean task failed!temptable[%s] maybe retained.", tempTable), e);
             }
-        } catch (SQLException e){
-            logger.warn(String.format("Clean task failed!temptable[%s] maybe retained.", tempTable), e);
         }
 
     }

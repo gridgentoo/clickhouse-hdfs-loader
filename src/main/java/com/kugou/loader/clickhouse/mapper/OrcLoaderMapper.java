@@ -70,6 +70,7 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
         if(!tempTable.contains(".")){
             tempTable = tempDatabase + "." + tempTable;
         }
+        logger.info("Output result: "+hostIndex+"@"+host+"-->"+tempTable);
         context.write(new Text(hostIndex+"@"+host), new Text(tempTable));
     }
 }
