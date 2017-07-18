@@ -3,6 +3,7 @@ package com.kugou.loader.clickhouse.task;
 import com.google.common.collect.Lists;
 import com.kugou.loader.clickhouse.ClickhouseClient;
 import com.kugou.loader.clickhouse.ClickhouseClientHolder;
+import com.kugou.loader.clickhouse.config.ClusterNodes;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import org.apache.commons.collections.CollectionUtils;
@@ -28,9 +29,9 @@ public class OldDailyMergeTask implements Runnable{
     private Configuration configuration;
     private int dailyExpires;
     private String dailyExpiresProcess;
-    private List<String> clickhouseClusterHosts = null;
+    private List<ClusterNodes> clickhouseClusterHosts = null;
 
-    public OldDailyMergeTask(Configuration configuration, int dailyExpires, String dailyExpiresProcess, List<String> clickhouseClusterHosts){
+    public OldDailyMergeTask(Configuration configuration, int dailyExpires, String dailyExpiresProcess, List<ClusterNodes> clickhouseClusterHosts){
         this.configuration = configuration;
         this.dailyExpires = dailyExpires;
         this.dailyExpiresProcess = dailyExpiresProcess;
@@ -76,34 +77,36 @@ public class OldDailyMergeTask implements Runnable{
 
             if(targetTableIsDistributed){
                 // merge and drop local table
-                for (String host : clickhouseClusterHosts){
-                    client = ClickhouseClientHolder.getClickhouseClient(host,
-                            configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
-                            configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
-                            configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
-                    ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and match(name, '"+targetLocalTable+"_\\\\d{8}$') and name < '" + lastDailyTable + "'");
-                    List<String> oldDailyTableName = Lists.newArrayList();
-                    while(ret.next()){
-                        String dailyTable = ret.getString(1);
-                        if(StringUtils.isNotBlank(dailyTable)){
-                            oldDailyTableName.add(dailyTable);
+                for (ClusterNodes host : clickhouseClusterHosts){
+                    for (int i =0; i< host.getHostsCount(); i++){
+                        client = ClickhouseClientHolder.getClickhouseClient(host.hostAddress(i),
+                                configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
+                                configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
+                                configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
+                        ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and match(name, '"+targetLocalTable+"_\\\\d{8}$') and name < '" + lastDailyTable + "'");
+                        List<String> oldDailyTableName = Lists.newArrayList();
+                        while(ret.next()){
+                            String dailyTable = ret.getString(1);
+                            if(StringUtils.isNotBlank(dailyTable)){
+                                oldDailyTableName.add(dailyTable);
+                            }
                         }
-                    }
-                    ret.close();
-                    if(CollectionUtils.isEmpty(oldDailyTableName)){
-                        log.info("Clickhouse Loader : Cannot found any old daily table before ["+lastDailyTable+"] for ["+targetTableFullname+"]");
-                        return ;
-                    }
-                    for(String table : oldDailyTableName){
-                        String oldDailyTableFullname = localDatabase +"." +table;
-                        log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"] on host["+host+"]");
-                        if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
-                            log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
-                            client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" SELECT * FROM "+oldDailyTableFullname);
+                        ret.close();
+                        if(CollectionUtils.isEmpty(oldDailyTableName)){
+                            log.info("Clickhouse Loader : Cannot found any old daily table before ["+lastDailyTable+"] for ["+targetTableFullname+"]");
+                            return ;
                         }
-                        client.dropTableIfExists(oldDailyTableFullname);
-                        // drop distributed table
-                        client.dropTableIfExists(configuration.get(ConfigurationKeys.CL_TARGET_TABLE_DATABASE)+"."+table);
+                        for(String table : oldDailyTableName){
+                            String oldDailyTableFullname = localDatabase +"." +table;
+                            log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"] on host["+host+"]");
+                            if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
+                                log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
+                                client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" SELECT * FROM "+oldDailyTableFullname);
+                            }
+                            client.dropTableIfExists(oldDailyTableFullname);
+                            // drop distributed table
+                            client.dropTableIfExists(configuration.get(ConfigurationKeys.CL_TARGET_TABLE_DATABASE)+"."+table);
+                        }
                     }
                 }
             }else{

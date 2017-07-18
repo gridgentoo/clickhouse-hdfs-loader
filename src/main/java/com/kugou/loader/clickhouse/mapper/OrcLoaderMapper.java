@@ -1,6 +1,7 @@
 package com.kugou.loader.clickhouse.mapper;
 
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
+import com.kugou.loader.clickhouse.config.ClusterNodes;
 import com.kugou.loader.clickhouse.mapper.decode.DefaultRowRecordDecoder;
 import com.kugou.loader.clickhouse.mapper.record.decoder.OrcRecordDecoder;
 import com.kugou.loader.clickhouse.mapper.decode.RecordDecoderConfigurable;
@@ -9,6 +10,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.orc.mapred.OrcStruct;
+import org.codehaus.jettison.json.JSONException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,11 +68,19 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
 //    }
 
     @Override
-    public void write(String host, String hostIndex, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
-        if(!tempTable.contains(".")){
-            tempTable = tempDatabase + "." + tempTable;
+    public void write(ClusterNodes nodes, String hostIndex, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
+        try {
+            for (int i = 0; i< nodes.getHostsCount(); i++){
+                String host = nodes.hostAddress(i);
+                if(!tempTable.contains(".")){
+                    tempTable = tempDatabase + "." + tempTable;
+                }
+                logger.info("Output result: "+hostIndex+"@"+host+"-->"+tempTable);
+                context.write(new Text(hostIndex+"@"+host), new Text(tempTable));
+            }
+        } catch (JSONException e) {
+            logger.error(e.getMessage(), e);
+            e.printStackTrace();
         }
-        logger.info("Output result: "+hostIndex+"@"+host+"-->"+tempTable);
-        context.write(new Text(hostIndex+"@"+host), new Text(tempTable));
     }
 }

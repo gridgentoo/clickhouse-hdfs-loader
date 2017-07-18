@@ -1,9 +1,9 @@
 package com.kugou.loader.clickhouse;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.kugou.loader.clickhouse.cli.MainCliParameterParser;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
+import com.kugou.loader.clickhouse.config.ClusterNodes;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import com.kugou.loader.clickhouse.mapper.CleanupTempTableOutputFormat;
@@ -24,10 +24,10 @@ import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
+import org.codehaus.jettison.json.JSONException;
 import org.kohsuke.args4j.CmdLineException;
 
 import java.sql.ResultSet;
@@ -35,6 +35,7 @@ import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,7 +57,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
     private String          targetDistributedTableShardingKey = null;
     private int             targetDistributedTableShardingKeyIndex = ConfigurationOptions.DEFAULT_SHARDING_KEY_INDEX;
     private String          targetLocalDailyTableFullName = null;
-    private List<String>    clickhouseClusterHosts = Lists.newArrayList();
+    private List<ClusterNodes>    clickhouseClusterHosts = Lists.newArrayList();
 
     public static void main(String[] args) throws Exception{
         int res = ToolRunner.run(new Configuration(), new ClickhouseHdfsLoader(), args);
@@ -206,7 +207,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
      * @throws SQLException
      * @throws ClassNotFoundException
      */
-    private void initClickhouseParameters(Configuration configuration, MainCliParameterParser parser) throws SQLException, ClassNotFoundException {
+    private void initClickhouseParameters(Configuration configuration, MainCliParameterParser parser) throws SQLException, ClassNotFoundException, JSONException {
         ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(parser.connect,
                 configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
                 configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
@@ -234,14 +235,15 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             configuration.set(ConfigurationKeys.CL_TARGET_CLUSTER_NAME, clickhouseClusterName);
             configuration.set(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE, targetLocalDatabase);
             configuration.set(ConfigurationKeys.CL_TARGET_LOCAL_TABLE, targetLocalTable);
-            configuration.set(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY, targetDistributedTableShardingKey);
+            if (StringUtils.isNotBlank(targetDistributedTableShardingKey))
+                configuration.set(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY, targetDistributedTableShardingKey);
 
             // sharding_key index
             targetDistributedTableShardingKeyIndex = getClickhouseDistributedShardingKeyIndex(configuration);
             configuration.setInt(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX, targetDistributedTableShardingKeyIndex);
             log.info("Clickhouse Loader : target table["+targetTableFullName+"] is Distributed on ["+clickhouseClusterName+"] by sharding["+targetDistributedTableShardingKey+",index="+targetDistributedTableShardingKeyIndex+"], look at ["+targetLocalDatabase+"."+targetLocalTable+"]");
         }else{
-            clickhouseClusterHosts.add(new ClickhouseConfiguration(configuration).extractHostFromConnectionUrl());
+            clickhouseClusterHosts.add(new ClusterNodes(new ClickhouseConfiguration(configuration).extractHostFromConnectionUrl()));
         }
 
         configuration.setBoolean(ConfigurationKeys.CL_TARGET_TABLE_IS_DISTRIBUTED, targetTableIsDistributed);
@@ -295,7 +297,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
      * @throws SQLException
      * @throws ClassNotFoundException
      */
-    private void createTargetDailyTable(Configuration configuration, String targetLocalTable, String mode) throws SQLException, ClassNotFoundException {
+    private void createTargetDailyTable(Configuration configuration, String targetLocalTable, String mode) throws SQLException, ClassNotFoundException, JSONException {
         ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
         // daily table suffix
         String dailyTableSuffix = "_"+configuration.get(ConfigurationKeys.CLI_P_DT).replaceAll("-","");
@@ -319,49 +321,64 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             String targetDistributedTableCreateDDL      = client.queryCreateTableScript(configuration.get(ConfigurationKeys.CL_TARGET_TABLE_FULLNAME));
             String targetDistributedDailyCreateDDL      = targetDistributedTableCreateDDL.replaceAll(configuration.get(ConfigurationKeys.CLI_P_TABLE), targetDistributedDailyTableName);
 
-            for (String host : clickhouseClusterHosts){
-                client = ClickhouseClientHolder.getClickhouseClient(host,
-                        configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
-                        configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
-                        configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
-                if (client.isTableExists(targetLocalDailyTableFullName)){
-                    if (mode.equalsIgnoreCase(ConfigurationOptions.RULE_OF_DROP_DAILY_TABLE)){
-                        log.info("Clickhouse Loader : host["+host+"] drop table ["+targetLocalTableFullName+"]");
-                        client.dropTableIfExists(targetLocalDailyTableFullName);
-                        log.info("Clickhouse Loader : host["+host+"] create daily table["+targetLocalDailyTableFullName+"] ddl["+targetLocalDailyCreateDDL+"]");
-                        client.executeUpdate(targetLocalDailyCreateDDL);
-                    }
-                }else{
-                    log.info("Clickhouse Loader : host["+host+"] create daily table["+targetLocalDailyTableFullName+"] ddl["+targetLocalDailyCreateDDL+"]");
-                    client.executeUpdate(targetLocalDailyCreateDDL);
-                }
-                if (client.isTableExists(targetDistributedDailyTableFullname)){
-                    if (mode.equalsIgnoreCase(ConfigurationOptions.RULE_OF_DROP_DAILY_TABLE)){
-                        log.info("Clickhouse Loader : host["+host+"] drop table ["+targetDistributedDailyTableFullname+"]");
-                        client.dropTableIfExists(targetDistributedDailyTableFullname);
-                        log.info("Clickhouse Loader : host["+host+"] create daily table["+targetDistributedDailyTableFullname+"] ddl["+targetDistributedDailyCreateDDL+"]");
-                        client.executeUpdate(targetDistributedDailyCreateDDL);
-                    }
-                }else{
-                    log.info("Clickhouse Loader : host["+host+"] create daily table["+targetDistributedDailyTableFullname+"] ddl["+targetDistributedDailyCreateDDL+"]");
-                    client.executeUpdate(targetDistributedDailyCreateDDL);
+            for (ClusterNodes host : clickhouseClusterHosts){
+                for (int i = 0; i<host.getHostsCount(); i++){
+                    client = ClickhouseClientHolder.getClickhouseClient(host.hostAddress(i),
+                            configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
+                            configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
+                            configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
+                    // 处理日表逻辑
+                    createDailyTables(client, host.hostAddress(i), targetLocalTableFullName, targetLocalDailyCreateDDL,
+                            targetDistributedDailyTableFullname, targetDistributedDailyCreateDDL, mode, targetTableIsDistributed);
                 }
             }
         }else{
-            if (client.isTableExists(targetLocalDailyTableFullName)){
-                if (mode.equalsIgnoreCase(ConfigurationOptions.RULE_OF_DROP_DAILY_TABLE)){
-                    log.info("Clickhouse Loader : host[localhost] drop table ["+targetLocalTableFullName+"]");
-                    client.dropTableIfExists(targetLocalDailyTableFullName);
-                    log.info("Clickhouse Loader : host[localhost] create daily table["+targetLocalDailyTableFullName+"] ddl["+targetLocalDailyCreateDDL+"]");
-                    client.executeUpdate(targetLocalDailyCreateDDL);
-                }
-            }else{
-                log.info("Clickhouse Loader : host[localhost] create daily table["+targetLocalDailyTableFullName+"] ddl["+targetLocalDailyCreateDDL+"]");
-                client.executeUpdate(targetLocalDailyCreateDDL);
-            }
+            // 处理日表逻辑
+            createDailyTables(client, "localhost", targetLocalTableFullName, targetLocalDailyCreateDDL,
+                    null, null, mode, targetTableIsDistributed);
         }
 
         configuration.set(ConfigurationKeys.CL_TARGET_LOCAL_DAILY_TABLE_FULLNAME, targetLocalDailyTableFullName);
+    }
+
+    /**
+     * 创建日表
+     * @param client
+     * @param host clickhouse 主机 IP
+     * @param targetLocalTableFullName 目标本地表名，xx.xxx
+     * @param targetLocalDailyCreateDDL 目标本地表创建脚本
+     * @param targetDistributedDailyTableFullname 目标分布式表名，yy.yy
+     * @param targetDistributedDailyCreateDDL 目标分布式表创建脚本
+     * @param mode 日表处理方式;drop or append
+     * @param isDistributed
+     * @throws SQLException
+     */
+    private void createDailyTables(ClickhouseClient client, String host, String targetLocalTableFullName, String targetLocalDailyCreateDDL,
+                                   String targetDistributedDailyTableFullname, String targetDistributedDailyCreateDDL, String mode, boolean isDistributed) throws SQLException {
+        if (client.isTableExists(targetLocalDailyTableFullName)){
+            if (mode.equalsIgnoreCase(ConfigurationOptions.RULE_OF_DROP_DAILY_TABLE)){
+                log.info("Clickhouse Loader : host["+host+"] drop table ["+targetLocalTableFullName+"]");
+                client.dropTableIfExists(targetLocalDailyTableFullName);
+                log.info("Clickhouse Loader : host["+host+"] create daily table["+targetLocalDailyTableFullName+"] ddl["+targetLocalDailyCreateDDL+"]");
+                client.executeUpdate(targetLocalDailyCreateDDL);
+            }
+        }else{
+            log.info("Clickhouse Loader : host["+host+"] create daily table["+targetLocalDailyTableFullName+"] ddl["+targetLocalDailyCreateDDL+"]");
+            client.executeUpdate(targetLocalDailyCreateDDL);
+        }
+        if (isDistributed){
+            if (client.isTableExists(targetDistributedDailyTableFullname)){
+                if (mode.equalsIgnoreCase(ConfigurationOptions.RULE_OF_DROP_DAILY_TABLE)){
+                    log.info("Clickhouse Loader : host["+host+"] drop table ["+targetDistributedDailyTableFullname+"]");
+                    client.dropTableIfExists(targetDistributedDailyTableFullname);
+                    log.info("Clickhouse Loader : host["+host+"] create daily table["+targetDistributedDailyTableFullname+"] ddl["+targetDistributedDailyCreateDDL+"]");
+                    client.executeUpdate(targetDistributedDailyCreateDDL);
+                }
+            }else{
+                log.info("Clickhouse Loader : host["+host+"] create daily table["+targetDistributedDailyTableFullname+"] ddl["+targetDistributedDailyCreateDDL+"]");
+                client.executeUpdate(targetDistributedDailyCreateDDL);
+            }
+        }
     }
 
     /**
@@ -371,7 +388,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
      * @param dailyExpiresProcess
      * @deprecated
      */
-    private void mergeAndDropOldDailyTable(Configuration configuration, int dailyExpires, String dailyExpiresProcess, String targetLocalTable) throws SQLException, ClassNotFoundException {
+    private void mergeAndDropOldDailyTable(Configuration configuration, int dailyExpires, String dailyExpiresProcess, String targetLocalTable) throws SQLException, ClassNotFoundException, JSONException {
         ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(configuration.get(ConfigurationKeys.CLI_P_CONNECT), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
         String localDatabase    = (StringUtils.isNotBlank(configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE)) ? configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE) : targetTableDatabase);
         Calendar cal = Calendar.getInstance();
@@ -382,32 +399,34 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
 
 
         if(targetTableIsDistributed){
-            for (String host : clickhouseClusterHosts){
-                client = ClickhouseClientHolder.getClickhouseClient(host,
-                        configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
-                        configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
-                        configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
-                ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and name > '" + lastDailyTable + "'");
-                List<String> oldDailyTableName = Lists.newArrayList();
-                while(ret.next()){
-                    String dailyTable = ret.getString(1);
-                    if(StringUtils.isNotBlank(dailyTable)){
-                        oldDailyTableName.add(dailyTable);
+            for (ClusterNodes host : clickhouseClusterHosts){
+                for (int i = 0; i<host.getHostsCount(); i++){
+                    client = ClickhouseClientHolder.getClickhouseClient(host.hostAddress(i),
+                            configuration.getInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, ConfigurationOptions.DEFAULT_CLICKHOUSE_HTTP_PORT),
+                            configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE),
+                            configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME), configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
+                    ResultSet ret = client.executeQuery("select name from system.tables where database='"+localDatabase+"' and name > '" + lastDailyTable + "'");
+                    List<String> oldDailyTableName = Lists.newArrayList();
+                    while(ret.next()){
+                        String dailyTable = ret.getString(1);
+                        if(StringUtils.isNotBlank(dailyTable)){
+                            oldDailyTableName.add(dailyTable);
+                        }
                     }
-                }
-                ret.close();
-                if(CollectionUtils.isEmpty(oldDailyTableName)){
-                    log.info("Clickhouse Loader : Cannot found any old daily table before ["+lastDailyTable+"] for ["+targetTableFullname+"]");
-                    return ;
-                }
-                for(String table : oldDailyTableName){
-                    String oldDailyTableFullname = localDatabase +"." +table;
-                    log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"] on host["+host+"]");
-                    if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
-                        log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
-                        client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" FROM SELECT * FROM "+oldDailyTableFullname);
+                    ret.close();
+                    if(CollectionUtils.isEmpty(oldDailyTableName)){
+                        log.info("Clickhouse Loader : Cannot found any old daily table before ["+lastDailyTable+"] for ["+targetTableFullname+"]");
+                        return ;
                     }
-                    client.dropTableIfExists(oldDailyTableFullname);
+                    for(String table : oldDailyTableName){
+                        String oldDailyTableFullname = localDatabase +"." +table;
+                        log.info("Clickhouse Loader : process old daily table ["+oldDailyTableFullname+"] on host["+host+"]");
+                        if(ConfigurationOptions.DailyExpiresProcess.MERGE.toString().equals(dailyExpiresProcess)){
+                            log.info("Clickhouse Loader : merge old daily table ["+oldDailyTableFullname+"] to ["+localDatabase+"."+targetLocalTable+"]");
+                            client.executeUpdate("INSERT INTO "+localDatabase+"."+targetLocalTable+" FROM SELECT * FROM "+oldDailyTableFullname);
+                        }
+                        client.dropTableIfExists(oldDailyTableFullname);
+                    }
                 }
             }
         }else{
@@ -436,23 +455,28 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         }
     }
 
-    public void cleanTemptable(String tempTablePrefix, List<String> clusterHostList, ClickhouseConfiguration conf){
+    public void cleanTemptable(String tempTablePrefix, List<ClusterNodes> clusterHostList, ClickhouseConfiguration conf){
         String sql = "select concat(database,'.', name) as tablename from system.tables where database='temp' and name like '"+tempTablePrefix+"%'";
-        for (String host : clusterHostList){
-            try{
-                ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, conf.getClickhouseHttpPort(),
-                        conf.getDatabase(), conf.getUsername(), conf.getPassword());
-                ResultSet ret = client.executeQuery(sql);
-                while (ret.next()){
-                    String tempTableName = ret.getString(1);
-                    log.info(String.format("Drop temptable[%s] on host[%s].", tempTableName, host));
-                    client.dropTableIfExists(tempTableName);
+        for (ClusterNodes nodes : clusterHostList){
+            for (int i =0 ; i< nodes.getHostsCount(); i++){
+                try{
+                    String host = nodes.hostAddress(i);
+                    ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(host, conf.getClickhouseHttpPort(),
+                            conf.getDatabase(), conf.getUsername(), conf.getPassword());
+                    ResultSet ret = client.executeQuery(sql);
+                    while (ret.next()){
+                        String tempTableName = ret.getString(1);
+                        log.info(String.format("Drop temptable[%s] on host[%s].", tempTableName, host));
+                        client.dropTableIfExists(tempTableName);
+                    }
+                    ret.close();
+                }catch (SQLException e){
+                    log.warn("CleanTemptable failed. ", e);
+                } catch (JSONException e) {
+                    log.error(e.getMessage(), e);
+                    e.printStackTrace();
                 }
-                ret.close();
-            }catch (SQLException e){
-                log.warn("CleanTemptable failed. ", e);
             }
-
         }
     }
 

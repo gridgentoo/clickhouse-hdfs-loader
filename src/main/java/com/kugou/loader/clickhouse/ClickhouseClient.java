@@ -1,9 +1,11 @@
 package com.kugou.loader.clickhouse;
 
 import com.google.common.collect.Lists;
+import com.kugou.loader.clickhouse.config.ClusterNodes;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.codehaus.jettison.json.JSONException;
 
 import java.sql.*;
 import java.util.List;
@@ -106,13 +108,26 @@ public class ClickhouseClient {
         }
     }
 
-    public List<String> queryClusterHosts(String cluster) throws SQLException {
-        ResultSet ret = statement.executeQuery("select distinct host_address from system.clusters where cluster='"+cluster+"'");
-        List<String> hosts = Lists.newArrayList();
-        while(ret.next()){
-            hosts.add(ret.getString(1));
+//    public List<String> queryClusterHosts(String cluster) throws SQLException {
+//        ResultSet ret = statement.executeQuery("select distinct host_address from system.clusters where cluster='"+cluster+"'  and replica_num = 1");
+//        List<String> hosts = Lists.newArrayList();
+//        while(ret.next()){
+//            hosts.add(ret.getString(1));
+//        }
+//        ret.close();
+//        return hosts;
+//    }
+
+    public List<ClusterNodes> queryClusterHosts(String cluster) throws SQLException, JSONException {
+        List<ClusterNodes> hosts = Lists.newArrayList();
+        if (StringUtils.isNotBlank(cluster)){
+            ResultSet ret = statement.executeQuery("select cluster, shard_num, groupArray(host_address) as hosts from system.clusters where cluster='"+cluster+"' group by cluster, shard_num");
+            while(ret.next()){
+                hosts.add(new ClusterNodes(ret.getString(1), ret.getInt(2), ret.getString(3)));
+//            hosts.add(ret.getString(1));
+            }
+            ret.close();
         }
-        ret.close();
         return hosts;
     }
 

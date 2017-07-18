@@ -26,6 +26,6 @@ public class CleanupTempTableOutputFormat<K, V> extends OutputFormat<K, V> {
 
     @Override
     public OutputCommitter getOutputCommitter(TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
-        return new CleanupTempTableOutputCommiter();
+        return new CleanupTempTableOutputCommitter();
     }
 }
