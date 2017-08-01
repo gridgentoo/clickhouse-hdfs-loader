@@ -14,4 +14,6 @@ public interface RowRecordDecoder<K, V> {
     Tuple.Tuple2<Integer, String> nextTuple();
 
     boolean isDistributedTableShardingKey();
+
+    boolean isExcludedField();
 }

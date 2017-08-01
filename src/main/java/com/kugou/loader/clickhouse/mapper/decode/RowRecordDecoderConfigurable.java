@@ -81,4 +81,8 @@ public abstract class RowRecordDecoderConfigurable<K, V> implements RowRecordDec
         return target_column_cursor == distributedTableShardingKeyIndex;
     }
 
+    @Override
+    public boolean isExcludedField() {
+        return excludeFieldsIndex.contains(this.cursor);
+    }
 }
