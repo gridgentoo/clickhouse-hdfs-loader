@@ -65,6 +65,7 @@ public class MainCliParameterParser {
     @Option(name="--mode", required = false, usage = "<append> 导入时如果日表已存在，数据将会追加到该日表.\n<drop> 导入时如果日表已存在，将会删除后，重建日表.")
     public String mode = "append";
 
+    @Deprecated
     @Option(name="--daily", required = false, usage = "是否把每天的数据导入到独立的日表")
     public String daily = "false";
 

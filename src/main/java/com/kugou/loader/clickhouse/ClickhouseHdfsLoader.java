@@ -35,7 +35,6 @@ import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -115,6 +114,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
 
         // init clickhouse parameters
         initClickhouseParameters(conf, cliParameterParser);
+
 
         if(BooleanUtils.toBoolean(cliParameterParser.daily, "true", "false")){
             String targetTable = cliParameterParser.table;
@@ -275,14 +275,13 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         if (StringUtils.isNotBlank(key)){
             String sql = "describe "+configuration.get(ConfigurationKeys.CL_TARGET_TABLE_FULLNAME);
             ResultSet resultSet = client.executeQuery(sql);
-            int index = 0;
+            int index = -1;
             while(resultSet.next()){
+                index ++;
                 String line = resultSet.getString(1);
                 if (key.equalsIgnoreCase(line.trim())){
                     ret = index;
                     break;
-                }else{
-                    index ++;
                 }
             }
             resultSet.close();

@@ -121,9 +121,9 @@ public class ClickhouseClient {
     public List<ClusterNodes> queryClusterHosts(String cluster) throws SQLException, JSONException {
         List<ClusterNodes> hosts = Lists.newArrayList();
         if (StringUtils.isNotBlank(cluster)){
-            ResultSet ret = statement.executeQuery("select cluster, shard_num, groupArray(host_address) as hosts from system.clusters where cluster='"+cluster+"' group by cluster, shard_num");
+            ResultSet ret = statement.executeQuery("select cluster, shard_num, shard_weight, groupArray(host_address) as hosts from system.clusters where cluster='"+cluster+"' group by cluster, shard_num, shard_weight order by shard_num desc");
             while(ret.next()){
-                hosts.add(new ClusterNodes(ret.getString(1), ret.getInt(2), ret.getString(3)));
+                hosts.add(new ClusterNodes(ret.getString(1), ret.getInt(2), ret.getInt(3), ret.getString(4)));
 //            hosts.add(ret.getString(1));
             }
             ret.close();

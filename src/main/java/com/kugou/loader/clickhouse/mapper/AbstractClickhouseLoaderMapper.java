@@ -55,9 +55,11 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     private Map<String, String> sqlResultCache = Maps.newHashMap();
     private String              clickhouseDistributedTableShardingKey = null;
     private HashFunction        hashFn = Hashing.murmur3_128();
-    private List<Integer>       excludeFieldIndexs = Lists.newArrayList();
+//    private List<Integer>       excludeFieldIndexs = Lists.newArrayList();
     private ClickhouseConfiguration config;
     private RowRecordDecoder<KEYIN, VALUEIN> rowRecordDecoder = null;
+
+    private int                 clusterShardTotalWeight = 0;
 
 
     @Override
@@ -161,14 +163,17 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         int maxColumnIndex = 0;
         while(rowRecordDecoder.hasNext()){
             Tuple.Tuple2<Integer, String> tuple2 = rowRecordDecoder.nextTuple();
+            if (null == tuple2)
+                continue;
+
             maxColumnIndex = tuple2._1();
 
             if(rowRecordDecoder.isDistributedTableShardingKey()){
                 clickhouseDistributedTableShardingKeyValue = tuple2._2();
             }
-            if (getExcludeFieldIndexs().contains(tuple2._1())){
-                continue;
-            }
+//            if (getExcludeFieldIndexs().contains(tuple2._1())){
+//                continue;
+//            }
             if(tuple2._1() != 0 && row.length() > 0) {
                 row.append(clickhouseFormat.SPERATOR);
             }
@@ -187,14 +192,13 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         }
 
         int dataColumnSize = maxColumnIndex + 1;
-        for (int index :excludeFieldIndexs){
-            if (index > maxColumnIndex){
-//                System.out.println("Clickhouse Loader : Found exclude index["+index+"] max than data_max_column_index["+maxColumnIndex+"]");
-                continue;
-            }else{
-                dataColumnSize --;
-            }
-        }
+//        for (int index :excludeFieldIndexs){
+//            if (index > maxColumnIndex){
+//                continue;
+//            }else{
+//                dataColumnSize --;
+//            }
+//        }
         int targetTableColumnSize = clickhouseJDBCConfiguration.getTargetTableColumnSize();
 
         boolean extractHivePartitions = clickhouseJDBCConfiguration.getBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, ConfigurationOptions.DEFAULT_EXTRACT_HIVE_PARTITIONS);
@@ -202,19 +206,40 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 
         int finalDataColumnSize = dataColumnSize;
         if (extractHivePartitions){
+            int position = 0;
             finalDataColumnSize += hivePartitions.size();
             Iterator<Map.Entry<String, String>> it = hivePartitions.entrySet().iterator();
             while (it.hasNext()){
-                Map.Entry<String, String> entry = it.next();
-                row.append(clickhouseFormat.SPERATOR).append(entry.getValue());
+                String column_val = it.next().getValue();
+                if (clickhouseDistributedTableShardingKeyIndex == dataColumnSize + position){
+                    clickhouseDistributedTableShardingKeyValue = column_val;
+                }
+                position ++;
+                row.append(clickhouseFormat.SPERATOR).append(column_val);
             }
         }
         if (hasAdditionalColumns){
-            String[] addCols = config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS).split(",");
-            finalDataColumnSize += addCols.length;
-            for (String addCol : addCols){
-                row.append(clickhouseFormat.SPERATOR).append(addCol);
+            dataColumnSize = finalDataColumnSize;
+            int position = 0;
+            StringTokenizer tokenizer = new StringTokenizer(config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS), ",");
+            while(tokenizer.hasMoreTokens()){
+                String column_val = tokenizer.nextToken();
+                if (clickhouseDistributedTableShardingKeyIndex == dataColumnSize + position){
+                    clickhouseDistributedTableShardingKeyValue = column_val;
+                }
+                position ++;
+                row.append(clickhouseFormat.SPERATOR).append(column_val);
+                finalDataColumnSize += 1;
             }
+//            String[] addCols = config.get(ConfigurationKeys.CLI_P_ADDITIONAL_COLUMNS).split(",");
+//            finalDataColumnSize += addCols.length;
+//            for (String addCol : addCols){
+//                if (clickhouseDistributedTableShardingKeyIndex == dataColumnSize + position){
+//                    clickhouseDistributedTableShardingKeyValue = addCol;
+//                }
+//                position ++;
+//                row.append(clickhouseFormat.SPERATOR).append(addCol);
+//            }
         }
 
         if (finalDataColumnSize != targetTableColumnSize){
@@ -230,6 +255,17 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         return clickhouseClusterHostList;
     }
 
+
+    private ClusterNodes getClusterNodesByShardIndex(int index){
+        int cursor = 0;
+        for (int i = 0; i < clickhouseClusterHostList.size(); i++){
+            if(index < (cursor += clickhouseClusterHostList.get(i).getShardWeight())){
+                return clickhouseClusterHostList.get(i);
+            }
+        }
+        throw new IllegalStateException("Cannot found cluster node by shard_index "+index);
+    }
+
     /**
      * 输出
      * @param record
@@ -239,13 +275,16 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         ClusterNodes nodes = null;
         if(getClickhouseClusterHostList().size() > 1){
             int code;
+
             if(StringUtils.isNotBlank(clickhouseDistributedTableShardingKeyValue)){
-                code = Math.abs(hashFn.hashString(clickhouseDistributedTableShardingKeyValue).asInt());
+                code = hashFn.hashString(clickhouseDistributedTableShardingKeyValue).asInt() & Integer.MAX_VALUE;
             }else{
-                code = Math.abs(hashFn.hashLong((long) (Math.random()*9+1)*100).asInt());
+                code = hashFn.hashString(UUID.randomUUID().toString()).asInt() & Integer.MAX_VALUE;
             }
-            int hostIndex = code % getClickhouseClusterHostList().size();
-            nodes = clickhouseClusterHostList.get(hostIndex);
+            // 整体权重按shard_weight划分
+            int shardIndex = code % clusterShardTotalWeight;
+//            nodes = clickhouseClusterHostList.get(hostIndex);
+            nodes = getClusterNodesByShardIndex(shardIndex);
         }else if (getClickhouseClusterHostList().size() == 1){
             nodes = getClickhouseClusterHostList().get(0);
         }
@@ -255,7 +294,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         }
         cache.records.append(record).append("\n");
         cache.recordsCount ++;
-        if(cache.recordsCount >= batchSize/getClickhouseClusterHostList().size()){
+        if(cache.recordsCount >= batchSize / getClickhouseClusterHostList().size()){
             cache.ready = true;
             batchInsert(context, nodes, configuration.getClickhouseHttpPort(), cache, this.maxTries);
         }
@@ -355,6 +394,9 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         this.config.getConf().setInt(ConfigurationKeys.CL_TARGET_TABLE_COLUMN_SIZE, targetTableColumnSize);
 
         clickhouseClusterHostList = client.queryClusterHosts(clickhouseClusterName);
+        for (ClusterNodes n : clickhouseClusterHostList){
+            this.clusterShardTotalWeight += n.getShardWeight();
+        }
 //        if(StringUtils.isNotBlank(clickhouseClusterName)){
 //            this.targetIsDistributeTable = true;
 //            ResultSet ret = client.executeQuery("select distinct host_address from system.clusters where cluster='"+this.clickhouseClusterName+"' and replica_num = 1");
@@ -374,15 +416,15 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             clickhouseClusterHostList.add(new ClusterNodes(configuration.extractHostFromConnectionUrl()));
         }
 
-        String excludeFieldIndexsParameter = configuration.get(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS);
-        if(StringUtils.isNotBlank(excludeFieldIndexsParameter)){
-            log.info("Clickhouse Loader : exclude src field column indexs :"+excludeFieldIndexsParameter);
-            Pattern p = Pattern.compile("(\\d+)");
-            Matcher m = p.matcher(excludeFieldIndexsParameter);
-            while(m.find()){
-                excludeFieldIndexs.add(Integer.valueOf(m.group(1)));
-            }
-        }
+//        String excludeFieldIndexsParameter = configuration.get(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS);
+//        if(StringUtils.isNotBlank(excludeFieldIndexsParameter)){
+//            log.info("Clickhouse Loader : exclude src field column indexs :"+excludeFieldIndexsParameter);
+//            Pattern p = Pattern.compile("(\\d+)");
+//            Matcher m = p.matcher(excludeFieldIndexsParameter);
+//            while(m.find()){
+//                excludeFieldIndexs.add(Integer.valueOf(m.group(1)));
+//            }
+//        }
 
         // Not for insert into temp distributed table
         this.sqlHeader = "INSERT INTO temp."+ this.tempTable +" FORMAT "+configuration.getClickhouseFormat();
@@ -531,9 +573,9 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         return hivePartitions;
     }
 
-    protected List<Integer> getExcludeFieldIndexs(){
-        return excludeFieldIndexs;
-    }
+//    protected List<Integer> getExcludeFieldIndexs(){
+//        return excludeFieldIndexs;
+//    }
 
 
 }
