@@ -60,6 +60,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     private RowRecordDecoder<KEYIN, VALUEIN> rowRecordDecoder = null;
 
     private int                 clusterShardTotalWeight = 0;
+    private String              mapTaskIdentify = null;
 
 
     @Override
@@ -113,10 +114,11 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             }
         }
 
-        int numReduceTask = config.getInt(ConfigurationKeys.CL_NUM_REDUCE_TASK, ConfigurationOptions.DEFAULT_LOADER_TASK_EXECUTOR);
-        int partition = (hashFn.hashString(tempTable).asInt() & Integer.MAX_VALUE) % numReduceTask;
+//        int numReduceTask = config.getInt(ConfigurationKeys.CL_NUM_REDUCE_TASK, ConfigurationOptions.DEFAULT_LOADER_TASK_EXECUTOR);
+//        int partition = (hashFn.hashString(tempTable).asInt() & Integer.MAX_VALUE) % numReduceTask;
         for(int i = 0; i < clickhouseClusterHostList.size(); i++){
-            write(clickhouseClusterHostList.get(i), i+"."+partition, tempTable, ConfigurationOptions.DEFAULT_TEMP_DATABASE, context);
+//            write(clickhouseClusterHostList.get(i), i+"."+partition, tempTable, ConfigurationOptions.DEFAULT_TEMP_DATABASE, context);
+            write(clickhouseClusterHostList.get(i), this.mapTaskIdentify, tempTable, ConfigurationOptions.DEFAULT_TEMP_DATABASE, context);
         }
 
         super.cleanup(context);
@@ -142,7 +144,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 
     public abstract RowRecordDecoder<KEYIN, VALUEIN> getRowRecordDecoder(Configuration config);
 
-    public abstract void write(ClusterNodes nodes, String hostIndex, String tempTable, String tempDatabase, Context context)
+    public abstract void write(ClusterNodes nodes, String mapTaskIdentify, String tempTable, String tempDatabase, Context context)
             throws IOException, InterruptedException;
 
     /**
@@ -363,7 +365,13 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
     protected String getTempTableName(Context context){
         ClickhouseConfiguration config = new ClickhouseConfiguration(context.getConfiguration());
         String taskId = context.getTaskAttemptID().getTaskID().toString();
-        return config.getTempTablePrefix()+taskId.substring(taskId.indexOf("m_"))+"_"+context.getTaskAttemptID().getId();
+        if (taskId.indexOf("m_") > -1){
+            this.mapTaskIdentify = taskId.substring(taskId.indexOf("m_"))+"_"+context.getTaskAttemptID().getId();
+        }else{
+            throw new IllegalArgumentException("taskid["+taskId+"] cannot found 'm_'");
+        }
+
+        return config.getTempTablePrefix()+this.mapTaskIdentify;
     }
 
     /**
