@@ -186,18 +186,18 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
             sourceDatabase = ConfigurationOptions.DEFAULT_TEMP_DATABASE;
             sourceTableName = sourceTable;
         }
-        int count = 0;
-        ResultSet ret = client.executeQuery("SELECT count(*) FROM system.tables WHERE database = '"+sourceDatabase+"' and name = '"+sourceTableName+"'");
-        if(ret.next()){
-            count = ret.getInt(1);
-        }
-        ret.close();
-
-        if(count == 0){
-            String msg = "Clickhouse JDBC : host["+host+"] table["+sourceDatabase+"."+sourceTableName+"] not exists.";
-            log.warn(msg);
-            throw new SQLException(msg);
-        }
+//        int count = 0;
+//        ResultSet ret = client.executeQuery("SELECT count(*) FROM system.tables WHERE database = '"+sourceDatabase+"' and name = '"+sourceTableName+"'");
+//        if(ret.next()){
+//            count = ret.getInt(1);
+//        }
+//        ret.close();
+//
+//        if(count == 0){
+//            String msg = "Clickhouse JDBC : host["+host+"] table["+sourceDatabase+"."+sourceTableName+"] not exists.";
+//            log.warn(msg);
+//            throw new SQLException(msg);
+//        }
         // insert
         insertFromTemp(client, sql.toString(), 0);
 
