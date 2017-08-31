@@ -163,6 +163,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         ConfigurationOptions.ClickhouseFormats clickhouseFormat = ConfigurationOptions.ClickhouseFormats.valueOf(clickhouseJDBCConfiguration.getClickhouseFormat());
 
         int maxColumnIndex = 0;
+        boolean rowHasContent = false;
         while(rowRecordDecoder.hasNext()){
             Tuple.Tuple2<Integer, String> tuple2 = rowRecordDecoder.nextTuple();
             if (null == tuple2)
@@ -176,7 +177,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 //            if (getExcludeFieldIndexs().contains(tuple2._1())){
 //                continue;
 //            }
-            if(tuple2._1() != 0 && row.length() > 0) {
+            if(rowHasContent) {
                 row.append(clickhouseFormat.SPERATOR);
             }
             String field;
@@ -190,6 +191,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 field = tuple2._2().replace(clickhouseFormat.SPERATOR, replaceChar).replace('\\', '/');
             }
             row.append(field);
+            rowHasContent = true;
 //            System.out.println("index="+tuple2._1()+":"+tuple2._2()+":"+field);
         }
 
@@ -335,6 +337,9 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                     } catch (Exception e) {
                         status = false;
                         log.error("Clickhouse JDBC : failed. COUSE BY "+e.getMessage(), e);
+                        if(count+1 == tries){
+                            log.error("Clickhouse JDBC: ERROR SQL:"+cache.records.toString());
+                        }
                         try {
                             Thread.sleep((tries+1)*10000l);
                         } catch (InterruptedException e1) {
