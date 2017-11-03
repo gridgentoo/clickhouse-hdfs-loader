@@ -23,7 +23,9 @@ import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.lib.input.CombineTextInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
@@ -96,6 +98,8 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         conf.setInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, cliParameterParser.clickhouseHttpPort);
         conf.setInt(ConfigurationKeys.CLI_P_LOADER_TASK_EXECUTOR, cliParameterParser.loaderTaskExecute);
         conf.setBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, BooleanUtils.toBoolean(cliParameterParser.extractHivePartitions, "true", "false"));
+        boolean direct = BooleanUtils.toBoolean(cliParameterParser.direct, "true", "false");
+        conf.setBoolean(ConfigurationKeys.CLI_P_DIRECT, direct);
         if(StringUtils.isNotBlank(cliParameterParser.excludeFieldIndexs)){
             conf.set(ConfigurationKeys.CLI_P_EXCLUDE_FIELD_INDEXS, cliParameterParser.excludeFieldIndexs);
         }
@@ -115,6 +119,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         // init clickhouse parameters
         initClickhouseParameters(conf, cliParameterParser);
 
+        log.info("Clickhouse Loader: loading data to clickhouse with direct["+direct+"]");
 
         if(BooleanUtils.toBoolean(cliParameterParser.daily, "true", "false")){
             String targetTable = cliParameterParser.table;
@@ -131,8 +136,6 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             }  catch  ( InterruptedException e) {
                 e.printStackTrace();
             }
-//            // merge and drop old daily table
-//            mergeAndDropOldDailyTable(conf, cliParameterParser.dailyExpires, cliParameterParser.dailyExpiresProcess, StringUtils.isNotBlank(targetLocalTable)?targetLocalTable:targetTable);
         }
 
         int numReduceTask =  1;
@@ -152,6 +155,8 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         Job job = Job.getInstance(conf);
         job.setJarByClass(ClickhouseHdfsLoader.class);
         job.setJobName("Clickhouse HDFS Loader");
+        CombineTextInputFormat.setMaxInputSplitSize(job, 256*1024*1024l);
+//        job.getConfiguration().set("mapreduce.input.fileinputformat.split.maxsize", "268435456");
 
         String mapperClass, inputFormatClass;
         if (StringUtils.isNotBlank(cliParameterParser.i)){
@@ -170,23 +175,22 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(Text.class);
 
-        job.setReducerClass(ClickhouseLoaderReducer.class);
+        if (direct){
+            job.setOutputFormatClass(NullOutputFormat.class);
+            job.setNumReduceTasks(0);
+        }else{
+            job.setReducerClass(ClickhouseLoaderReducer.class);
+            job.setNumReduceTasks(numReduceTask);
+        }
+//        job.setReducerClass(ClickhouseLoaderReducer.class);
 //        job.setOutputFormatClass(NullOutputFormat.class);
         job.setOutputFormatClass(CleanupTempTableOutputFormat.class);
 
-        job.setNumReduceTasks(numReduceTask);
-//        job.setPartitionerClass(HostSequencePartitioner.class);
 
         //设置Map关闭推测执行task
         job.setMapSpeculativeExecution(false);
-//        if (!conf.getBoolean(ConfigurationOptions.MAPPER_MAP_SPECULATIVE_EXECUTION, true)) {
-//            job.setMapSpeculativeExecution(false);
-//        }
         //设置Reduce关闭推测执行task
         job.setReduceSpeculativeExecution(false);
-//        if (!conf.getBoolean(ConfigurationOptions.REDUCE_MAP_SPECULATIVE_EXECUTION, true)) {
-//            job.setReduceSpeculativeExecution(false);
-//        }
 
         FileInputFormat.addInputPath(job, new Path(conf.get(ConfigurationKeys.CLI_P_EXPORT_DIR)));
 
@@ -198,7 +202,9 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             ret = 1;
         }
 
-        cleanTemptable(tempTablePrefix, clickhouseClusterHosts, new ClickhouseConfiguration(conf));
+        if (!BooleanUtils.toBoolean(cliParameterParser.direct, "true", "false")){
+            cleanTemptable(tempTablePrefix, clickhouseClusterHosts, new ClickhouseConfiguration(conf));
+        }
 
         return ret;
     }

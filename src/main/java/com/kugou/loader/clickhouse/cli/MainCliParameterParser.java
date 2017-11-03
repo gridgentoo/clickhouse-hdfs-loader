@@ -42,7 +42,7 @@ public class MainCliParameterParser {
     public String dt;
 
     @Option(name="--batch-size", required = false, usage = "batch size load data into clickhouse")
-    public int batchSize = 100000;
+    public int batchSize = 196608;
 
     @Option(name="--max-tries", required = false, usage = "当在导入发生异常时的重试次数")
     public int maxTries = 3;
@@ -92,6 +92,9 @@ public class MainCliParameterParser {
 
     @Option(name="--additional-cols", required = false, usage = "导入时，数据每行追加内容；多个值以逗号划分")
     public String additionalCols = "";
+
+    @Option(name="--direct", required = false, usage = "直接导入目标表，而不经过中间表处理")
+    public String direct = "true";
 
     @Option(name="--help",required = false)
     public boolean help = false;

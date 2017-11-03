@@ -1,8 +1,10 @@
 package com.kugou.loader.clickhouse.reducer;
 
+import com.google.common.collect.Lists;
 import com.kugou.loader.clickhouse.ClickhouseClient;
 import com.kugou.loader.clickhouse.ClickhouseClientHolder;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
+import com.kugou.loader.clickhouse.config.ClusterNodes;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
 import org.apache.commons.lang.StringUtils;
@@ -11,11 +13,13 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Reducer;
+import org.codehaus.jettison.json.JSONException;
 
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Created by jaykelin on 2016/11/15.
@@ -29,6 +33,7 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
     private String          clickhouseClusterName = null;
     private String          distributedLocalDatabase = null;
     private String          targetLocalDailyTable = null;
+    private List<ClusterNodes> clickhouseClusterHostList = Lists.newArrayList();
 
     private int maxTries;
 
@@ -59,15 +64,27 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
         }
         log.info("Clickhouse JDBC : reduce process host["+host+"].");
         ClickhouseClient client = null;
+        boolean isReplicated = false;
         try{
             ClickhouseConfiguration clickhouseJDBCConfiguration = new ClickhouseConfiguration(context.getConfiguration());
             String targetTable = clickhouseJDBCConfiguration.getTableName();
             if(targetIsDistributeTable){
-                targetTable = distributedLocalDatabase + "." + targetTable;
+
                 client = ClickhouseClientHolder.getClickhouseClient(host, clickhouseJDBCConfiguration.getClickhouseHttpPort(),distributedLocalDatabase,
                         clickhouseJDBCConfiguration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
                         clickhouseJDBCConfiguration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD)
                 );
+                String s = "select engine from system.tables where database = '"+distributedLocalDatabase+"' and name = '"+targetTable+"'";
+                ResultSet ret = client.executeQuery(s);
+                while (ret.next()){
+                  String engine = ret.getString(1);
+                  if (engine.startsWith("Replicated")){
+                      isReplicated = true;
+                      break;
+                  }
+                }
+                ret.close();
+                targetTable = distributedLocalDatabase + "." + targetTable;
             }else{
                 targetTable = clickhouseJDBCConfiguration.getDatabase()+"."+targetTable;
                 client = ClickhouseClientHolder.getClickhouseClient(host, clickhouseJDBCConfiguration.getClickhouseHttpPort(), clickhouseJDBCConfiguration.getDatabase(),
@@ -81,11 +98,32 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
                 targetTable = dailyTable;
             }
 
+
+            clickhouseClusterHostList = client.queryClusterHosts(clickhouseClusterName);
+            ClusterNodes nodes = null;
+            for (ClusterNodes n : clickhouseClusterHostList){
+                if (n.contains(host)){
+                    nodes = n;
+                    break;
+                }
+            }
+
             Iterator<Text> it = values.iterator();
             while(it.hasNext()){
                 Text value = it.next();
                 if(value != null){
-                    process(client, host, targetTable, value.toString());
+                    // src table
+                    String sourceTable = value.toString();
+                    String srcTableFullname = null;
+                    int docIndex = sourceTable.indexOf(".");
+                    if(docIndex >= 0){
+                        srcTableFullname = sourceTable;
+                    }else {
+                        srcTableFullname = ConfigurationOptions.DEFAULT_TEMP_DATABASE +"." + sourceTable;
+                    }
+
+//                    process(client, host, targetTable, value.toString());
+                    process(clickhouseJDBCConfiguration,client,host,nodes,isReplicated,targetTable,srcTableFullname);
                 }
             }
         } catch (Exception e){
@@ -161,6 +199,48 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
 
     /**
      * 处理每一条记录
+     * @param config
+     * @param client
+     * @param nodes
+     * @param isReplicated
+     * @param targetTableFullname
+     * @param srcTableFullname
+     */
+    protected  void process(ClickhouseConfiguration config, ClickhouseClient client, String curHost, ClusterNodes nodes,
+                            boolean isReplicated, String targetTableFullname, String srcTableFullname)
+            throws IOException, JSONException, SQLException {
+        // step.1 insert into target select * from src
+        // TODO how to handle error
+        log.info("Clickhouse JDBC:["+curHost+"] Insert INTO "+targetTableFullname+" FROM "+srcTableFullname);
+        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        sql.append(targetTableFullname).append(" SELECT * FROM ").append(srcTableFullname);
+        log.info("Clickhouse JDBC :["+curHost+"] process execute sql["+sql.toString()+"]");
+
+        // insert
+        insertFromTemp(client, sql.toString(), 0);
+
+        if (!isReplicated){
+            // insert into other replica
+            for (int i = 0; i< nodes.getHostsCount(); i++){
+                String h = nodes.hostAddress(i);
+                if (!StringUtils.equals(h, curHost)){
+                    ClickhouseClient replicaClient = ClickhouseClientHolder.getClickhouseClient(h, config.getClickhouseHttpPort(),distributedLocalDatabase,
+                            config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
+                            config.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
+                    log.info("Clickhouse JDBC:["+h+"] Insert INTO "+targetTableFullname+" FROM "+srcTableFullname);
+
+                    // insert
+                    insertFromTemp(replicaClient, sql.toString(), 0);
+                    replicaClient.close();
+                }
+            }
+        }
+        // drop temp table
+        cleanTemp(client, srcTableFullname, 0);
+    }
+
+    /**
+     * 处理每一条记录
      * @param client
      * @param host
      * @param targetTable
@@ -186,6 +266,8 @@ public class ClickhouseLoaderReducer extends Reducer<Text, Text, NullWritable, T
             sourceDatabase = ConfigurationOptions.DEFAULT_TEMP_DATABASE;
             sourceTableName = sourceTable;
         }
+
+
 //        int count = 0;
 //        ResultSet ret = client.executeQuery("SELECT count(*) FROM system.tables WHERE database = '"+sourceDatabase+"' and name = '"+sourceTableName+"'");
 //        if(ret.next()){

@@ -24,6 +24,7 @@ public class ConfigurationKeys {
     public final static String CLI_P_CLICKHOUSE_USERNAME = "username";
     public final static String CLI_P_CLICKHOUSE_PASSWORD = "password";
     public final static String CLI_P_ADDITIONAL_COLUMNS = "additional-columns";
+    public final static String CLI_P_DIRECT = "direct";
 
     public final static String LOADER_TEMP_TABLE_PREFIX = "loader_temp_table_prefix";
     public final static String CL_TARGET_TABLE_DATABASE = "cl_target_table_database";

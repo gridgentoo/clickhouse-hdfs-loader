@@ -26,6 +26,8 @@ public class ConfigurationOptions {
     public static final String  RULE_OF_APPEND_DAILY_TABLE = "append";
     public static final String  RULE_OF_DROP_DAILY_TABLE   = "drop";
 
+    public static final int     DEFAULT_MAX_CONCURRENT_MAP_TASK = 20;
+
 
     public enum DailyExpiresProcess{
         MERGE("merge"), DROP("drop");
@@ -74,9 +76,11 @@ public class ConfigurationOptions {
         public String INPUT_FORMAT_CLAZZ;
         public String MAPPER_CLAZZ;
 
+
         InputFormats(String format) throws UnsupportedOperationException{
             if (format.equalsIgnoreCase("text")){
-                INPUT_FORMAT_CLAZZ = "org.apache.hadoop.mapreduce.lib.input.TextInputFormat";
+                //INPUT_FORMAT_CLAZZ = "org.apache.hadoop.mapreduce.lib.input.TextInputFormat";
+                INPUT_FORMAT_CLAZZ = "org.apache.hadoop.mapreduce.lib.input.CombineTextInputFormat";
                 MAPPER_CLAZZ = "com.kugou.loader.clickhouse.mapper.TextLoaderMapper";
             }else if (format.equalsIgnoreCase("orc")){
                 INPUT_FORMAT_CLAZZ = "org.apache.orc.mapreduce.OrcInputFormat";

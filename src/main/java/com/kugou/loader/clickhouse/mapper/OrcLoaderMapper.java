@@ -69,18 +69,27 @@ public class OrcLoaderMapper extends AbstractClickhouseLoaderMapper<NullWritable
 
     @Override
     public void write(ClusterNodes nodes, String mapTaskIdentify, String tempTable, String tempDatabase, Context context) throws IOException, InterruptedException {
-        try {
-            for (int i = 0; i< nodes.getHostsCount(); i++){
-                String host = nodes.hostAddress(i);
+        for(String host: nodes.getNodeDataStatus().keySet()){
+            if (nodes.getNodeDataStatus().get(host)){
                 if(!tempTable.contains(".")){
                     tempTable = tempDatabase + "." + tempTable;
                 }
                 logger.info("Output result: "+mapTaskIdentify+"@"+host+"-->"+tempTable);
                 context.write(new Text(mapTaskIdentify+"@"+host), new Text(tempTable));
             }
-        } catch (JSONException e) {
-            logger.error(e.getMessage(), e);
-            e.printStackTrace();
         }
+//        try {
+//            for (int i = 0; i< nodes.getHostsCount(); i++){
+//                String host = nodes.hostAddress(i);
+//                if(!tempTable.contains(".")){
+//                    tempTable = tempDatabase + "." + tempTable;
+//                }
+//                logger.info("Output result: "+mapTaskIdentify+"@"+host+"-->"+tempTable);
+//                context.write(new Text(mapTaskIdentify+"@"+host), new Text(tempTable));
+//            }
+//        } catch (JSONException e) {
+//            logger.error(e.getMessage(), e);
+//            e.printStackTrace();
+//        }
     }
 }

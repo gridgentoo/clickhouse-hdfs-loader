@@ -1,5 +1,6 @@
 package com.kugou.test;
 
+import com.google.common.collect.Maps;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
@@ -132,5 +133,22 @@ public class Test {
         }
 
         System.out.println(i);
+    }
+
+    @org.junit.Test
+    public void mainTest(){
+//        int i = 2;
+//        System.out.println(new Long(System.currentTimeMillis()%i).intValue());
+
+        Map<String, Boolean> t = Maps.newHashMap();
+        t.put("xx", false);
+        t.put("yy", true);
+        for (String s : t.keySet()){
+            System.out.println(t.size()+"--"+t.get("xx"));
+            t.put("xx", true);
+        }
+//        t.put("xx", true);
+//        t.put("xx", false);
+        System.out.println(t.size()+"--"+t.get("xx"));
     }
 }
