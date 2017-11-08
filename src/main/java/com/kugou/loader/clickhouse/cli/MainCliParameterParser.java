@@ -99,6 +99,9 @@ public class MainCliParameterParser {
     @Option(name="--help",required = false)
     public boolean help = false;
 
+    @Option(name="--input-split-max-bytes", required = false, usage = "合并小文件大小阀值，只对-i text 格式的数据源有效")
+    public Long inputSplitMaxBytes = 268435456l;
+
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }

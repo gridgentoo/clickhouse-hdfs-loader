@@ -150,5 +150,10 @@ public class Test {
 //        t.put("xx", true);
 //        t.put("xx", false);
         System.out.println(t.size()+"--"+t.get("xx"));
+
+
+        String s = "xxxx\nzzzz";
+        System.out.println(s);
+        System.out.println(s.replaceAll("\n", "--"));
     }
 }

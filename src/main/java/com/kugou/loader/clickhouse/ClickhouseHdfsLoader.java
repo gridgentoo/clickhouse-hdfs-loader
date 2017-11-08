@@ -155,7 +155,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         Job job = Job.getInstance(conf);
         job.setJarByClass(ClickhouseHdfsLoader.class);
         job.setJobName("Clickhouse HDFS Loader");
-        CombineTextInputFormat.setMaxInputSplitSize(job, 256*1024*1024l);
+        CombineTextInputFormat.setMaxInputSplitSize(job, cliParameterParser.inputSplitMaxBytes);
 //        job.getConfiguration().set("mapreduce.input.fileinputformat.split.maxsize", "268435456");
 
         String mapperClass, inputFormatClass;
@@ -181,10 +181,11 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         }else{
             job.setReducerClass(ClickhouseLoaderReducer.class);
             job.setNumReduceTasks(numReduceTask);
+            job.setOutputFormatClass(CleanupTempTableOutputFormat.class);
         }
 //        job.setReducerClass(ClickhouseLoaderReducer.class);
 //        job.setOutputFormatClass(NullOutputFormat.class);
-        job.setOutputFormatClass(CleanupTempTableOutputFormat.class);
+//        job.setOutputFormatClass(CleanupTempTableOutputFormat.class);
 
 
         //设置Map关闭推测执行task
@@ -485,6 +486,11 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
                     log.error(e.getMessage(), e);
                     e.printStackTrace();
                 }
+            }
+            try {
+                Thread.sleep(200l);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
     }
