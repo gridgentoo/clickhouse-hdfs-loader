@@ -46,7 +46,7 @@ import java.util.regex.Pattern;
 public class ClickhouseHdfsLoader extends Configured implements Tool {
 
     private static final    Log log = LogFactory.getLog(ClickhouseHdfsLoader.class);
-    private static final    Pattern CLICKHOUSE_DISTRIBUTED_ENGINE_CAUSE = Pattern.compile("= *Distributed *\\( *([A-Za-z0-9_\\-]+) *, *'?([A-Za-z0-9_\\-]+)'? *, *'?([A-Za-z0-9_\\-]+)'? *(, *[a-zA-Z0-9_\\-]+\\(([A-Za-z0-9_\\-]+|)\\))? *\\)$");
+    private static final    Pattern CLICKHOUSE_DISTRIBUTED_ENGINE_CAUSE = Pattern.compile("= *Distributed *\\( *'?([A-Za-z0-9_\\-]+)'? *, *'?([A-Za-z0-9_\\-]+)'? *, *'?([A-Za-z0-9_\\-]+)'? *(, *[a-zA-Z0-9_\\-]+\\(([A-Za-z0-9_\\-]+|)\\))? *\\)$");
     private static final    Pattern urlRegexp = Pattern.compile("^jdbc:clickhouse://([\\d\\.\\-_\\w]+):(\\d+)/([\\d\\w\\-_]+)(\\?.+)?$");
 
     private String          clickhouseClusterName = null;
