@@ -4,10 +4,12 @@ import com.google.common.collect.Lists;
 import com.kugou.loader.clickhouse.config.ClickhouseConfiguration;
 import com.kugou.loader.clickhouse.config.ConfigurationKeys;
 import com.kugou.loader.clickhouse.config.ConfigurationOptions;
+import com.kugou.loader.clickhouse.context.ClickhouseLoaderContext;
 import com.kugou.loader.clickhouse.utils.Tuple;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.StringTokenizer;
 
@@ -23,6 +25,7 @@ public abstract class RowRecordDecoderConfigurable<K, V> implements RowRecordDec
     private   RecordDecoderConfigurable recordDecoder = null;
     private   List<Integer>           excludeFieldsIndex = Lists.newArrayList();
     private   int                     target_column_cursor = -1;
+    private   ClickhouseLoaderContext loaderContext = null;
 
     public RowRecordDecoderConfigurable(Configuration configuration, RecordDecoderConfigurable recordDecoder){
         this.recordDecoder = recordDecoder;
@@ -36,6 +39,11 @@ public abstract class RowRecordDecoderConfigurable<K, V> implements RowRecordDec
             while (tokenizer.hasMoreTokens()){
                 excludeFieldsIndex.add(Integer.valueOf(tokenizer.nextToken()));
             }
+        }
+        try {
+            this.loaderContext = new ClickhouseLoaderContext(this.config);
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 
@@ -84,5 +92,13 @@ public abstract class RowRecordDecoderConfigurable<K, V> implements RowRecordDec
     @Override
     public boolean isExcludedField() {
         return excludeFieldsIndex.contains(this.cursor);
+    }
+
+    @Override
+    public boolean columnIsStringType() {
+        if (null != loaderContext){
+            return loaderContext.columnIsStringType(target_column_cursor);
+        }
+        return false;
     }
 }

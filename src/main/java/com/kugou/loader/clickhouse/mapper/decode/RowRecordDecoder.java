@@ -16,4 +16,10 @@ public interface RowRecordDecoder<K, V> {
     boolean isDistributedTableShardingKey();
 
     boolean isExcludedField();
+
+    /**
+     * 字段是否字符串类型
+     * @return
+     */
+    boolean columnIsStringType();
 }

@@ -177,11 +177,18 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
                 row.append(clickhouseFormat.SPERATOR);
             }
             String field;
-            if (null == tuple2._2()){
-                field = nullString;
-            }
-            else if (StringUtils.equals(tuple2._2(), "\\N")){
-                field = nullNonString;
+//            if (null == tuple2._2()){
+//                field = nullString;
+//            }
+//            else if (StringUtils.equals(tuple2._2(), "\\N")){
+//                field = nullNonString;
+//            }
+            if (null == tuple2._2() || StringUtils.equals(tuple2._2(), "\\N")){
+                if (rowRecordDecoder.columnIsStringType()){
+                    field = nullString;
+                }else{
+                    field = nullNonString;
+                }
             }
             else {
                 field = tuple2._2().replace(clickhouseFormat.SPERATOR, replaceChar).replace('\\', '/');
