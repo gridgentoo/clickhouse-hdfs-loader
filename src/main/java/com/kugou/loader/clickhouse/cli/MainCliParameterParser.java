@@ -102,6 +102,9 @@ public class MainCliParameterParser {
     @Option(name="--input-split-max-bytes", required = false, usage = "合并小文件大小阀值，只对-i text 格式的数据源有效")
     public Long inputSplitMaxBytes = 268435456l;
 
+    @Option(name="--escape-null", required = false, usage = "当设置为false，将会保留\\N作为字段值提交给clickhouse")
+    public String escapeNull = "true";
+
     public MainCliParameterParser(){
         this.cmdLineParser = new CmdLineParser(this);
     }

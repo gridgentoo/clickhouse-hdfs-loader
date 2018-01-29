@@ -98,6 +98,7 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         conf.setInt(ConfigurationKeys.CLI_P_CLICKHOUSE_HTTP_PORT, cliParameterParser.clickhouseHttpPort);
         conf.setInt(ConfigurationKeys.CLI_P_LOADER_TASK_EXECUTOR, cliParameterParser.loaderTaskExecute);
         conf.setBoolean(ConfigurationKeys.CLI_P_EXTRACT_HIVE_PARTITIONS, BooleanUtils.toBoolean(cliParameterParser.extractHivePartitions, "true", "false"));
+        conf.setBoolean(ConfigurationKeys.CLI_P_ESCAPE_NULL, BooleanUtils.toBoolean(cliParameterParser.escapeNull,"true", "false"));
         boolean direct = BooleanUtils.toBoolean(cliParameterParser.direct, "true", "false");
         conf.setBoolean(ConfigurationKeys.CLI_P_DIRECT, direct);
         if(StringUtils.isNotBlank(cliParameterParser.excludeFieldIndexs)){
@@ -222,18 +223,36 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
         ClickhouseClient client = ClickhouseClientHolder.getClickhouseClient(parser.connect,
                 configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_USERNAME),
                 configuration.get(ConfigurationKeys.CLI_P_CLICKHOUSE_PASSWORD));
+
+        // target database and table
+        // CLI_P_TABLE              -> cli target table
+        // CLI_P_DATABASE           -> cli target database
+        // CL_TARGET_TABLE_FULLNAME -> cli target database.table
+
         targetTableDatabase = extractTargetTableDatabase(parser.connect, parser.table);
         configuration.set(ConfigurationKeys.CL_TARGET_TABLE_DATABASE, targetTableDatabase);
         targetTableFullName = parser.table;
         if(!targetTableFullName.contains(".")){
             targetTableFullName = targetTableDatabase + "." + targetTableFullName;
         }
-
-        log.info("Clickhouse Loader : load data to table["+targetTableFullName+"].");
+        configuration.set(ConfigurationKeys.CLI_P_DATABASE, targetTableDatabase);
         configuration.set(ConfigurationKeys.CL_TARGET_TABLE_FULLNAME, targetTableFullName);
+
+        log.info("parse and loading parameter:");
+        log.info("CLI_P_TABLE              -> "+configuration.get(ConfigurationKeys.CLI_P_TABLE));
+        log.info("CLI_P_DATABASE           -> "+configuration.get(ConfigurationKeys.CLI_P_DATABASE));
+        log.info("CL_TARGET_TABLE_FULLNAME -> "+configuration.get(ConfigurationKeys.CL_TARGET_TABLE_FULLNAME));
+
         String targetCreateDDL = client.queryCreateTableScript(targetTableFullName);
         Matcher m = CLICKHOUSE_DISTRIBUTED_ENGINE_CAUSE.matcher(targetCreateDDL);
         if (m.find()){
+            // for Distributed table engine
+            // CL_TARGET_CLUSTER_NAME                   -> cluster name
+            // CL_TARGET_LOCAL_DATABASE                 -> local database
+            // CL_TARGET_LOCAL_TABLE                    -> local table
+            // CL_TARGET_DISTRIBUTED_SHARDING_KEY       -> sharding key
+            // CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX -> sharding key column index
+
             targetTableIsDistributed = true;
             clickhouseClusterName = m.group(1);
             targetLocalDatabase = m.group(2);
@@ -241,8 +260,6 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             targetDistributedTableShardingKey = m.group(5);
 
             clickhouseClusterHosts = client.queryClusterHosts(clickhouseClusterName);
-            log.info("Clickhouse Loader : cluster["+clickhouseClusterName+"] look at "+clickhouseClusterHosts.size()+" hosts.");
-
             configuration.set(ConfigurationKeys.CL_TARGET_CLUSTER_NAME, clickhouseClusterName);
             configuration.set(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE, targetLocalDatabase);
             configuration.set(ConfigurationKeys.CL_TARGET_LOCAL_TABLE, targetLocalTable);
@@ -252,11 +269,20 @@ public class ClickhouseHdfsLoader extends Configured implements Tool {
             // sharding_key index
             targetDistributedTableShardingKeyIndex = getClickhouseDistributedShardingKeyIndex(configuration);
             configuration.setInt(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX, targetDistributedTableShardingKeyIndex);
+
+            log.info("CL_TARGET_CLUSTER_NAME                    -> "+configuration.get(ConfigurationKeys.CL_TARGET_CLUSTER_NAME));
+            log.info("CL_TARGET_LOCAL_DATABASE                  -> "+configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_DATABASE));
+            log.info("CL_TARGET_LOCAL_TABLE                     -> "+configuration.get(ConfigurationKeys.CL_TARGET_LOCAL_TABLE));
+            log.info("CL_TARGET_DISTRIBUTED_SHARDING_KEY        -> "+configuration.get(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY));
+            log.info("CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX  -> "+configuration.get(ConfigurationKeys.CL_TARGET_DISTRIBUTED_SHARDING_KEY_INDEX));
+
+            log.info("Clickhouse Loader : cluster["+clickhouseClusterName+"] look at "+clickhouseClusterHosts.size()+" hosts.");
             log.info("Clickhouse Loader : target table["+targetTableFullName+"] is Distributed on ["+clickhouseClusterName+"] by sharding["+targetDistributedTableShardingKey+",index="+targetDistributedTableShardingKeyIndex+"], look at ["+targetLocalDatabase+"."+targetLocalTable+"]");
         }else{
             clickhouseClusterHosts.add(new ClusterNodes(new ClickhouseConfiguration(configuration).extractHostFromConnectionUrl()));
         }
 
+        log.info("Clickhouse Loader : load data to table["+targetTableFullName+"].");
         configuration.setBoolean(ConfigurationKeys.CL_TARGET_TABLE_IS_DISTRIBUTED, targetTableIsDistributed);
     }
 

@@ -134,10 +134,11 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         } catch (JSONException e) {
             context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Illegal format records").increment(1);
             log.error(e.getMessage(), e);
-        } catch (Exception e) {
-            context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Failed records").increment(1);
-            log.error(e.getMessage(), e);
         }
+//        catch (Exception e) {
+//            context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Failed records").increment(1);
+//            log.error(e.getMessage(), e);
+//        }
 
     }
 
@@ -184,10 +185,14 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
 //                field = nullNonString;
 //            }
             if (null == tuple2._2() || StringUtils.equals(tuple2._2(), "\\N")){
-                if (rowRecordDecoder.columnIsStringType()){
-                    field = nullString;
+                if (config.getBoolean(ConfigurationKeys.CLI_P_ESCAPE_NULL, true)){
+                    if (rowRecordDecoder.columnIsStringType()){
+                        field = nullString;
+                    }else{
+                        field = nullNonString;
+                    }
                 }else{
-                    field = nullNonString;
+                    field = "\\N";
                 }
             }
             else {
@@ -260,7 +265,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
      * 输出
      * @param record
      */
-    protected synchronized void write(KEYIN key, String record, Context context) throws Exception {
+    protected synchronized void write(KEYIN key, String record, Context context) throws JSONException {
         ClickhouseConfiguration configuration = new ClickhouseConfiguration(context.getConfiguration());
         ClusterNodes nodes = null;
         if(getClickhouseClusterHostList().size() > 1){
@@ -298,7 +303,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
      * @param cache
      * @param tries
      */
-    protected void batchDirectInsert(Context context, ClusterNodes nodes, int port, HostRecordsCache cache, int tries) throws Exception {
+    protected void batchDirectInsert(Context context, ClusterNodes nodes, int port, HostRecordsCache cache, int tries) throws JSONException {
         boolean done = false;
         int count = 0;
         Map<String, Boolean> hostStatus = Maps.newHashMap();
@@ -338,7 +343,9 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
         }
 
         if (!done){
-            throw new Exception("Clickhouse JDBC: temp data insert failed. total records = "+cache.recordsCount);
+//            throw new Exception("Clickhouse JDBC: temp data insert failed. total records = "+cache.recordsCount);
+            log.error("Clickhouse JDBC: temp data insert failed. total records = "+cache.recordsCount);
+            context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Failed records").increment(cache.recordsCount);
         }else{
             context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Success records").increment(cache.recordsCount);
         }
@@ -354,7 +361,7 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
      * @param tries
      * @throws JSONException
      */
-    protected void batchInsert(Context context, ClusterNodes nodes, int port, HostRecordsCache cache, int tries, boolean direct) throws JSONException, Exception {
+    protected void batchInsert(Context context, ClusterNodes nodes, int port, HostRecordsCache cache, int tries, boolean direct) throws JSONException {
         if (direct){
             batchDirectInsert(context, nodes, port, cache, tries);
         }else{
@@ -425,7 +432,9 @@ public abstract class AbstractClickhouseLoaderMapper<KEYIN, VALUEIN, KEYOUT, VAL
             }
 
             if (!done){
-                throw new Exception("Clickhouse JDBC: temp data insert failed. total records = "+cache.recordsCount);
+//                throw new Exception("Clickhouse JDBC: temp data insert failed. total records = "+cache.recordsCount);
+                log.error("Clickhouse JDBC: temp data insert failed. total records = "+cache.recordsCount);
+                context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Failed records").increment(cache.recordsCount);
             }else{
                 context.getCounter(CLICKHOUSE_COUNTERS_GROUP, "Success records").increment(cache.recordsCount);
             }
