@@ -27,7 +27,7 @@ public class MainCliParameterParser {
     public String fieldsTerminatedBy = "|";
 
     @Option(name="--null-non-string", required = false, usage = "")
-    public String nullNonString = "";
+    public String nullNonString = "0";
 
     @Option(name="--null-string",required = false, usage ="")
     public String nullString = "";
