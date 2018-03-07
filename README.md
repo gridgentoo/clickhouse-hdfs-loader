@@ -7,9 +7,11 @@ loading hdfs data to clickhouse，Support text or orc.
 					SeparatedWithNames|TabSeparatedWithNamesAndTypes|TabSeparatedRaw|
 					CSV|CSVWithNames] (default:TabSeparated)
 	--connect VAL                 : jdbc:clickhouse://<host>:<port>/<database>
-	--daily VAL                   : 是否把每天的数据导入到独立的日表 (default: false)
-	--daily-expires N             : 导入时将会判断过期日表，默认保留3天的日表数据 (default: 3)
-	--daily-expires-process VAL   : 过期日表的处理规则：merge:把过期日表数据导入base表后删除日表，drop:把过期日表删除 (default: merge)
+	--daily VAL                   : Deprecated!是否把每天的数据导入到独立的日表 (default: false)
+	--daily-expires N             : Deprecated!导入时将会判断过期日表，默认保留3天的日表数据 (default: 3)
+	--daily-expires-process VAL   : Deprecated!过期日表的处理规则：
+					merge:把过期日表数据导入base表后删除日表，
+					drop:把过期日表删除 (default: merge)
 	--direct VAL                  : 直接导入目标表，而不经过中间表处理 (default: true)
 	--driver VAL                  : 驱动类名，一般保留默认配置 (default: ru.yandex.clickhouse.ClickHouseDriver)
 	--dt VAL                      : 导入数据的业务时间,format:YYYY-MM-DD
