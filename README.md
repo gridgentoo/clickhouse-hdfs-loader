@@ -37,5 +37,19 @@ submit Mapreduce job to hadoop,loading hdfs data to clickhouse，Support text or
 
 ## Build
 `mvn clean package assembly:assembly -DskipTests`  
-经过测试，在hadoop 2.7.1， 使用下面的jdbc客户端可以避免http包冲突问题
+经过测试，在hadoop 2.7.1， 使用下面的jdbc客户端可以避免http包冲突问题  
 https://github.com/jaykelin/clickhouse-jdbc/tree/0.1-SNAPSHOT
+
+## Usage
+```bash
+hadoop jar clickhouse-hdfs-loader.jar com.kugou.loader.clickhouse.ClickhouseHdfsLoader \
+-Dmapreduce.job.queuename=root.default \
+-i text \
+--connect jdbc:clickhouse://xxx:8123/database \
+--username xx --password xx \
+--table distributed_table \
+--dt 2018-01-01 \
+--export-dir hdfs_path  \
+--extract-hive-partitions true \
+--exclude-fields 0,4,5,8 
+```
