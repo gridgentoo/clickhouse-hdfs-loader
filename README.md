@@ -1,3 +1,7 @@
+
+![MapR]( https://github.com/gridgentoo/clickhouse-hdfs-loader ) 
+
+![MapR]( https://bizexc.files.wordpress.com/2016/09/r-server.png ) 
 # clickhouse-hdfs-loader
 submit Mapreduce job to hadoop,loading hdfs data to clickhouse，Support text or orc.
 ## Options
