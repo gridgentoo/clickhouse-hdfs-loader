@@ -1,5 +1,5 @@
 
-![MapR]( https://github.com/gridgentoo/clickhouse-hdfs-loader ) 
+![MapR]( https://grafana.com/api/dashboards/2515/images/1528/image ) 
 
 ![MapR]( https://bizexc.files.wordpress.com/2016/09/r-server.png ) 
 # clickhouse-hdfs-loader
